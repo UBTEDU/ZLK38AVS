@@ -61,6 +61,7 @@ pi_kheaders :
 	   echo "kernel headers do not exist, fetching and installing kernel headers..."; \
 	   sudo apt-get update; \
 	   sudo apt-get install raspberrypi-kernel-headers; \
+	   sudo apt-get install -y xterm; \
 		else \
 	   echo "kernel headers do not exist, fetching and installing kernel headers..."; \
 	   sudo wget https://raw.githubusercontent.com/notro/rpi-source/master/rpi-source -O /usr/bin/rpi-source && sudo chmod +x /usr/bin/rpi-source && /usr/bin/rpi-source -q --tag-update; \
@@ -291,7 +292,10 @@ message:
 	@echo "--****************************************************************************--" 
 
 .PHONY: alexa_exec
+
+
 alexa_exec:
-	x-terminal-emulator -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/samples/companionService && npm start; exec bash"'
-	x-terminal-emulator -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/samples/javaclient && mvn exec:exec; exec bash"'
-	x-terminal-emulator -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/samples/wakeWordAgent/src && ./wakeWordAgent -e sensory; exec bash"'
+	@sudo cp /etc/asound.conf $(HOST_USER_HOME_DIR)/.asoundrc 
+	xterm -hold -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/samples/companionService && npm start; exec bash"' &
+	xterm -hold -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/samples/javaclient && mvn exec:exec; exec bash"' &
+	xterm -hold -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/samples/wakeWordAgent/src && ./wakeWordAgent -e sensory; exec bash"' &
