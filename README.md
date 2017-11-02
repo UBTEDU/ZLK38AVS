@@ -1,19 +1,27 @@
 ![Microsemi AVS banner](../../wiki/pictures/Microsemi_AVS_HmPgBnr_2017_06.jpg)
 ---
 ## About the project
-Microsemi AcuEdgeô Development Kit for Amazon AVS is engineered to help you evaluate voice-enabled front-end audio systems for your Alexa-enabled products. This kit features Microsemiís ZL38063 voice processor powered by Microsemiís proprietary AcuEdgeô technology for front-end audio clean-up and Sensoryís TrulyHandsFreeô ìAlexaî wake-word engine. A two microphone configuration allow you to test applications with 180∞ or 360∞ audio pick-up.
+Microsemi AcuEdge‚Ñ¢ Development Kit for Amazon AVS is engineered to help you evaluate voice-enabled front-end audio systems for your Alexa-enabled products. This kit features Microsemi‚Äôs ZL38063 voice processor powered by Microsemi‚Äôs proprietary AcuEdge‚Ñ¢ technology for front-end audio clean-up and Sensory‚Äôs TrulyHandsFree‚Ñ¢ ‚ÄúAlexa‚Äù wake-word engine. A two microphone configuration allow you to test applications with 180¬∞ or 360¬∞ audio pick-up.
 
 Please see [Howto](https://github.com/Microsemi/ZLK38AVS/wiki/howto) for quick start how-to instructions.
 
 
 
-## Whatís new?
+## What‚Äôs new?
 **May 30, 2017:**
 * V1.0.0: Initial release
 
 ## Important considerations
-* IMPORTANT: The Amazon Java application is not currently compatible with Raspbian Strech, use Raspbian Jessie (8.0)
-* IMPORTANT: The Sensory wake word engine included with this project is time-limited: code linked against it will stop working when the library expires. The library included in this repository will, at all times, have an expiration date that is at least 120 days in the future. See Sensory's GitHub page for more information on how to renew the license for non-commercial use.
+* IMPORTANT: If you encounter the following compilation error with Raspbian Stretch:
+```
+/lib/modules/4.9.41-v7+/build: No such file or directory
+```
+
+   It means that the installer cannot find the headers matching the installed Linux kernel. One workarround is to update the kernel as follow:
+```
+sudo rpi-update a6b3e852ca70f2a12850b4542438583cc3b29788
+```
+* IMPORTANT: The Sensory wake word engine included with this project is time-limited: code linked against it will stop working when the library expires. The library included in this repository will, at all times, have an expiration date that is at least 120 days in the future. See [Sensory's GitHub page](https://github.com/Sensory/alexa-rpi) for more information on how to renew the license for non-commercial use.
 * Due to some limitation in the Alexa Reference implementation, volume 5 should be considered the maximum volume.
 
 ## Resources
