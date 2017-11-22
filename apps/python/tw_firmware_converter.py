@@ -326,7 +326,7 @@ def FormatS7ToHbi(list, block_size):
     return temp_list_bytes
 
 # ****************************************************************************
-def GenerateFwFile(in_file, out_path, fw_opn, block_size):
+def GenerateFwFile(in_file, in_path, out_path, fw_opn, block_size):
     global page_select
     global left_over_bytes
 
@@ -403,13 +403,13 @@ def GetFirmwareBinFile(in_path, fw_opn, block_size = 16):
     if not os.path.isfile(in_path):
         raise ValueError("Error - GetFirmwareBinFile(): Invalid input file")
 
-    return GenerateFwFile(ParseFile(in_path), None, fw_opn, block_size)
+    return GenerateFwFile(ParseFile(in_path), in_path, None, fw_opn, block_size)
 
 # ****************************************************************************
 # This function is designed to be called programmatically
 def GetFirmwareBinFileB(in_file, fw_opn, block_size = 16):
 
-    return GenerateFwFile(in_file, None, fw_opn, block_size)
+    return GenerateFwFile(in_file, "", None, fw_opn, block_size)
 
 # ****************************************************************************
 def FormatData(addr, data_list):
@@ -527,7 +527,7 @@ ex: %s ZLS38040_configuration.cr2 ZLS38040_configuration.c -b 64
             if (args.firmwareOPN == None):
                 raise ValueError("Error - Main(): firmware numerical OPN (-f) is missing")
             # Process a firmware image
-            GenerateFwFile(ParseFile(args.inputPath), args.outputPath, args.firmwareOPN, args.blockSize)
+            GenerateFwFile(ParseFile(args.inputPath), args.inputPath, args.outputPath, args.firmwareOPN, args.blockSize)
 
         elif (file_extension.lower() == ".cr2"):
             # Process a configuration record

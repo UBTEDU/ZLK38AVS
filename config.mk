@@ -1,10 +1,10 @@
 # --------------------------------------------------------------
 #
 #	FILE NAME:		config.mk
-#   AUTHOR:	        Microsemi		
-#	DESCRIPTION:    This config file contains global variables used 
-#					by either the vproc SDK code the apps or by the top level Makefile	
-#                   
+#   AUTHOR:	        Microsemi
+#	DESCRIPTION:    This config file contains global variables used
+#					by either the vproc SDK code the apps or by the top level Makefile
+#
 #
 # --------------------------------------------------------------
 export INSTALL_MSCC_MOD_DIR =/lib/modules/`uname -r`/kernel/drivers
@@ -16,10 +16,12 @@ export MSCC_LOCAL_LIB_PATH =$(ROOTDIR)/libs
 export platformUser :=`id -un`
 export platformGroup :=`id -gn`
 
-AMAZON_AVS_ONLINE_REPOSITORY =https://github.com/alexa/alexa-avs-sample-app.git
-SENSORY_ALEXA_ONLINE_REPOSITORY =https://github.com/Sensory/alexa-rpi.git
-AMAZON_AVS_LOCAL_DIR ?=$(ROOTDIR)/../amazon_avs
-AMAZON_AVS_FILE_PATH=$(AMAZON_AVS_LOCAL_DIR)/automated_install.sh
+AMAZON_AVS_ONLINE_REPOSITORY =https://github.com/alexa/avs-device-sdk
+SENSORY_ALEXA_ONLINE_REPOSITORY =https://github.com/Sensory/alexa-rpi
+AMAZON_AVS_LOCAL_DIR ?=$(ROOTDIR)/../amazon_avs_cpp
+AMAZON_AVS_JSON_CONFIG =$(AMAZON_AVS_LOCAL_DIR)/sdk-build/Integration/AlexaClientSDKConfig.json
+# Amazon 1.2.1 AVS SDK
+AMAZON_AVS_GIT_HASH =a2b84e329c71ecb18e07ba0e852921e96c4b4fc6
 
 HOST_PI_IMAGE_VER :=`cat /etc/os-release`
 HOST_KHEADERS_DIR =/lib/modules/`uname -r`/build
@@ -31,20 +33,20 @@ HOST_USER_PROF_START_CFG_FILE_PATH :=/home/$(platformUser)/.profile
 HOST_USER_HOME_DIR :=/home/$(platformUser)
 MSCC_LOCAL_APPS_PATH =$(ROOTDIR)/../apps
 HOST_SAMBA_CFG_PATH =/etc/samba/smb.conf
-HOST_SAMBA_SHARE_PATH = $(HOST_USER_HOME_DIR)/shares
+HOST_SAMBA_SHARE_PATH =$(HOST_USER_HOME_DIR)/shares
 
-MSCC_SND_COD_MOD=snd-soc-zl380xx
-MSCC_SND_MAC_MOD=snd-soc-microsemi-dac
-MSCC_HBI_MOD=hbi
-MSCC_SND_MIXER_MOD=snd-soc-zl380xx-mixer
-MSCC_APPS_FWLD=mscc_fw_loader
+MSCC_SND_COD_MOD =snd-soc-zl380xx
+MSCC_SND_MAC_MOD =snd-soc-microsemi-dac
+MSCC_HBI_MOD =hbi
+MSCC_SND_MIXER_MOD =snd-soc-zl380xx-mixer
+MSCC_APPS_FWLD =mscc_fw_loader
 
-MSCC_DAC_OVERLAY_DTB=microsemi-dac-overlay
-MSCC_SPIMULTI_DTB=microsemi-spi-multi-tw-overlay
-MSCC_SPI_DTB=microsemi-spi-overlay
+MSCC_DAC_OVERLAY_DTB =microsemi-dac-overlay
+MSCC_SPIMULTI_DTB =microsemi-spi-multi-tw-overlay
+MSCC_SPI_DTB =microsemi-spi-overlay
 
 #TW configuration option for MICs 180 or 360 degree
-MSCC_TW_CONFIG_SELECT=180
+MSCC_TW_CONFIG_SELECT =180
 
 #-------DO NOT MAKE CHANGE BELOW this line ---------------------------
 
@@ -55,224 +57,357 @@ else
 endif
 
 # if the raspberrypi kernel headers needed to compile the sdk do not exist fetch them
-.PHONY: pi_kheaders alexa_install
+.PHONY: pi_kheaders avs_git alexa_install
+
 pi_kheaders :
 	@if cat /etc/os-release | grep -q 'stretch'; then \
-	   echo "kernel headers do not exist, fetching and installing kernel headers..."; \
-	   sudo apt-get update; \
-	   sudo apt-get install raspberrypi-kernel-headers; \
-	   sudo apt-get install -y xterm; \
-		else \
-	   echo "kernel headers do not exist, fetching and installing kernel headers..."; \
-	   sudo wget https://raw.githubusercontent.com/notro/rpi-source/master/rpi-source -O /usr/bin/rpi-source && sudo chmod +x /usr/bin/rpi-source && /usr/bin/rpi-source -q --tag-update; \
-	   sudo apt-get install bc; \
-	   rpi-source; \
-	   sudo apt-get update; \
+	    echo "kernel headers do not exist, fetching and installing kernel headers..."; \
+	    sudo apt-get update; \
+	    sudo apt-get install raspberrypi-kernel-headers; \
+	    sudo apt-get install -y xterm; \
+	else \
+	    echo; \
+	    echo; \
+	    echo "--****************************************************************************--"; \
+	    echo "--                                 ABORTING                                   --"; \
+	    echo "--                   Only Raspbian 9 \"Stretch\" is supported                   --"; \
+	    echo "--****************************************************************************--"; \
+	    echo; \
+	    false; \
 	fi
-	
-
-MsFwLoader=""
-
 
 startupcfg:
 	@if [ ! -f $(HOST_USER_HOME_DIR)/.profile.backup ]; then \
-	   sudo cp $(HOST_USER_PROF_START_CFG_FILE_PATH) $(HOST_USER_HOME_DIR)/.profile.backup ; \
-	   echo "sudo chown -R $(platformUser):$(platformGroup) /dev/$(MSCC_HBI_MOD)" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH);	\
+	    sudo cp $(HOST_USER_PROF_START_CFG_FILE_PATH) $(HOST_USER_HOME_DIR)/.profile.backup ; \
+	    echo "sudo chown -R $(platformUser):$(platformGroup) /dev/$(MSCC_HBI_MOD)" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
 	fi
 	@if [ ! -f $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ]; then \
-	   sudo cp $(HOST_USER_APPS_START_CFG_FILE_PATH) $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ; \
+	    sudo cp $(HOST_USER_APPS_START_CFG_FILE_PATH) $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ; \
 	fi
 	@ (	\
 	if grep -e "$(MSCC_APPS_FWLD) 0" $(HOST_USER_APPS_START_CFG_FILE_PATH); then  \
-	   echo "Found 0, updating ... "$(MSCC_TW_CONFIG_SELECT);	\
-	   sudo sed -i "s/$(MSCC_APPS_FWLD) 0/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "Found 0, updating ... "$(MSCC_TW_CONFIG_SELECT);	\
+	    sudo sed -i "s/$(MSCC_APPS_FWLD) 0/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
 	elif grep -e "$(MSCC_APPS_FWLD) 1" $(HOST_USER_APPS_START_CFG_FILE_PATH); then  \
-	   echo "Found 1, updating ... "$(MSCC_TW_CONFIG_SELECT);	\
-	   sudo sed -i "s/$(MSCC_APPS_FWLD) 1/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "Found 1, updating ... "$(MSCC_TW_CONFIG_SELECT);	\
+	    sudo sed -i "s/$(MSCC_APPS_FWLD) 1/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
 	else \
-	   echo "not Found , updating ... "$(MSCC_TW_CONFIG_SELECT);	\
-	   sudo sed -i "s/exit 0/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
-	   echo "exit 0" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH);	\
+	    echo "not Found , updating ... "$(MSCC_TW_CONFIG_SELECT); \
+	    sudo sed -i "s/exit 0/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "exit 0" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH); \
 	fi \
 	)
-		
+
 install_sub:
 	sudo install -m 0755 $(HBI_MOD_LOCAL_PATH)/*.ko $(INSTALL_MSCC_MOD_DIR)
 	sudo install -m 0755 $(MSCC_LOCAL_LIB_PATH)/*.ko $(INSTALL_MSCC_MOD_DIR)
-	sudo install -m 0755 $(MSCC_LOCAL_LIB_PATH)/*.dtbo $(INSTALL_MSCC_OVERLAYS_DIR)	
-	sudo install -m 0755 $(MSCC_LOCAL_APPS_PATH)/$(MSCC_APPS_FWLD) $(INSTALL_MSCC_APPS_PATH)	
+	sudo install -m 0755 $(MSCC_LOCAL_LIB_PATH)/*.dtbo $(INSTALL_MSCC_OVERLAYS_DIR)
+	sudo install -m 0755 $(MSCC_LOCAL_APPS_PATH)/$(MSCC_APPS_FWLD) $(INSTALL_MSCC_APPS_PATH)
 
-.PHONY: modcfg_edit bootcfg_edit startupcfg cleanmod_sub cleanov_sub modcfg_cp 
+.PHONY: modcfg_edit bootcfg_edit startupcfg cleanmod_sub cleanov_sub modcfg_cp
 cleanmod_sub:
 	sudo rm $(INSTALL_MSCC_APPS_PATH)/$(MSCC_APPS_FWLD)
-	@ (	\
+	@ ( \
 	for line in $(MSCC_MOD_NAMES); 	do	\
-	   echo "$$line" ;\
-	   if grep -Fxq "$$line"  $(HOST_MODULES_FILE_PATH) ; then  \
-	      echo "Found, then removing $$line...";	\
-		  sudo sed -i "/$$line/ d" $(HOST_MODULES_FILE_PATH); \
-		  TEMPVAR=$$line.ko; \
-		  echo "$$TEMPVAR ..." ; \
-		  sudo rm $(INSTALL_MSCC_MOD_DIR)/$$TEMPVAR; \
-	   fi \
-	done	\
+	    echo "$$line" ;\
+	    if grep -Fxq "$$line"  $(HOST_MODULES_FILE_PATH) ; then \
+	        echo "Found, then removing $$line..."; \
+	        sudo sed -i "/$$line/ d" $(HOST_MODULES_FILE_PATH); \
+	        TEMPVAR=$$line.ko; \
+	        echo "$$TEMPVAR ..." ; \
+	        sudo rm $(INSTALL_MSCC_MOD_DIR)/$$TEMPVAR; \
+	    fi \
+	done \
 	)
-	
-.PHONY: cleansnd_sub cleanprof_sub cleanrc_sub cleanboot_sub cleanmodcfg_sub bootcfg_sub message
+
+.PHONY: cleanaboot_sub cleansnd_sub cleanprof_sub cleanrc_sub cleanboot_sub cleanmodcfg_sub bootcfg_sub message autostart_script
+cleanaboot_sub:
+	@if [ -f $(ROOTDIR)/../\.start.sh ]; then \
+	    rm $(ROOTDIR)/../\.start.sh; \
+	fi
+	@if [ -f $(HOST_USER_HOME_DIR)/\.config/lxsession/LXDE-pi/autostart.backup ]; then \
+	    cp $(HOST_USER_HOME_DIR)/\.config/lxsession/LXDE-pi/autostart.backup $(HOST_USER_HOME_DIR)/\.config/lxsession/LXDE-pi/autostart; \
+	    rm $(HOST_USER_HOME_DIR)/\.config/lxsession/LXDE-pi/autostart.backup; \
+	fi
+
 cleansnd_sub:
 	@if [ -f $(HOST_USER_HOME_DIR)/.asoundrc.backup ]; then \
-	   sudo cp $(HOST_USER_HOME_DIR)/.asoundrc.backup $(HOST_USER_HOME_DIR)/.asoundrc	; \
-	   sudo rm $(HOST_USER_HOME_DIR)/.asoundrc.backup  ; \
-	   sudo rm /etc/asound.conf  ; \
-	fi	
+	    sudo cp $(HOST_USER_HOME_DIR)/.asoundrc.backup $(HOST_USER_HOME_DIR)/.asoundrc; \
+	    sudo rm $(HOST_USER_HOME_DIR)/.asoundrc.backup; \
+	    sudo rm /etc/asound.conf; \
+	fi
 
 cleanprof_sub:
 	@if [ -f $(HOST_USER_HOME_DIR)/.profile.backup ]; then \
-	   sudo cp $(HOST_USER_HOME_DIR)/.profile.backup $(HOST_USER_HOME_DIR)/.profile	; \
-	   sudo rm $(HOST_USER_HOME_DIR)/.profile.backup ; \
-	fi	
+	    sudo cp $(HOST_USER_HOME_DIR)/.profile.backup $(HOST_USER_HOME_DIR)/.profile; \
+	    sudo rm $(HOST_USER_HOME_DIR)/.profile.backup; \
+	fi
 
 cleanrc_sub:
 	@if [ -f $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ]; then \
-	   sudo cp $(HOST_USER_APPS_START_CFG_FILE_PATH).backup $(HOST_USER_APPS_START_CFG_FILE_PATH); \
-	   sudo rm $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ; \
+	    sudo cp $(HOST_USER_APPS_START_CFG_FILE_PATH).backup $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    sudo rm $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ; \
 	fi
 
-cleanboot_sub: 
+cleanboot_sub:
 	@if [ -f $(HOST_BOOTCFG_FILE_PATH).backup ]; then \
-	   sudo cp $(HOST_BOOTCFG_FILE_PATH).backup $(HOST_BOOTCFG_FILE_PATH) ; \
-	   sudo rm $(HOST_BOOTCFG_FILE_PATH).backup ; \
-	fi	
-
+	    sudo cp $(HOST_BOOTCFG_FILE_PATH).backup $(HOST_BOOTCFG_FILE_PATH); \
+	    sudo rm $(HOST_BOOTCFG_FILE_PATH).backup; \
+	fi
 
 cleanmodcfg_sub:
 	@if [ -f $(HOST_MODULES_FILE_PATH).backup ]; then \
-	   sudo cp $(HOST_MODULES_FILE_PATH).backup $(HOST_MODULES_FILE_PATH) ; \
-	   sudo rm $(HOST_MODULES_FILE_PATH).backup; \
-	fi	
-	
+	    sudo cp $(HOST_MODULES_FILE_PATH).backup $(HOST_MODULES_FILE_PATH); \
+	    sudo rm $(HOST_MODULES_FILE_PATH).backup; \
+	fi
 
-cleanov_sub: 
+cleanov_sub:
 	@ (	\
-	for line in $(MSCC_DTB_NAMES); 	do	\
-	   echo "$$line" ;\
-	   if grep -Fxq "dtoverlay=$$line"  $(HOST_BOOTCFG_FILE_PATH) ; then  \
-	      echo "Found, then removing $$line...";	\
-		  sudo sed -i "/dtoverlay=$$line/ d" $(HOST_BOOTCFG_FILE_PATH); \
-		  TEMPVAR=$$line.dtbo; \
-		  echo "$$TEMPVAR ..."; \
-		  sudo rm $(INSTALL_MSCC_OVERLAYS_DIR)/$$TEMPVAR ; \
-	   fi \
-	done	\
+	for line in $(MSCC_DTB_NAMES); do \
+	    echo "$$line"; \
+	    if grep -Fxq "dtoverlay=$$line"  $(HOST_BOOTCFG_FILE_PATH); then \
+	        echo "Found, then removing $$line..."; \
+	        sudo sed -i "/dtoverlay=$$line/ d" $(HOST_BOOTCFG_FILE_PATH); \
+	        TEMPVAR=$$line.dtbo; \
+	        echo "$$TEMPVAR ..."; \
+	        sudo rm $(INSTALL_MSCC_OVERLAYS_DIR)/$$TEMPVAR; \
+	    fi \
+	done \
 	)
 
-modcfg_cp: 
+modcfg_cp:
 	sudo cp $(HOST_MODULES_FILE_PATH) $(HOST_MODULES_FILE_DIR)
 	sudo depmod -a
 
 modcfg_edit:
 	@if [ ! -f $(HOST_MODULES_FILE_PATH).backup ]; then \
-	   sudo cp $(HOST_MODULES_FILE_PATH) $(HOST_MODULES_FILE_PATH).backup ; \
-	fi	
-	@ (	\
-	for line in $(MSCC_MOD_NAMES); 	do	\
-	   echo "$$line" ;\
-	   if grep -Fxq "$$line"  $(HOST_MODULES_FILE_PATH) ; then  \
-	      echo "Found, then nothing to do...";	\
-	   else  \
-	      echo "adding $$line into that config file...";	\
-	      sudo bash -c "echo "$$line" >> $(HOST_MODULES_FILE_PATH)"; \
-	   fi \
-	done	\
+	   sudo cp $(HOST_MODULES_FILE_PATH) $(HOST_MODULES_FILE_PATH).backup; \
+	fi
+	@ ( \
+	for line in $(MSCC_MOD_NAMES); do \
+	    echo "$$line"; \
+	    if grep -Fxq "$$line"  $(HOST_MODULES_FILE_PATH); then \
+	        echo "Found, then nothing to do..."; \
+	    else \
+	        echo "adding $$line into that config file..."; \
+	        sudo bash -c "echo "$$line" >> $(HOST_MODULES_FILE_PATH)"; \
+	    fi \
+	done \
 	)
 
 bootcfg_sub:
 	@if [ ! -f $(HOST_BOOTCFG_FILE_PATH).backup ]; then \
-	   sudo cp $(HOST_BOOTCFG_FILE_PATH) $(HOST_BOOTCFG_FILE_PATH).backup ; \
-	fi	
-	sudo sed -i "s/dtparam=audio=on/#dtparam=audio=on/g" $(HOST_BOOTCFG_FILE_PATH)	
+	   sudo cp $(HOST_BOOTCFG_FILE_PATH) $(HOST_BOOTCFG_FILE_PATH).backup; \
+	fi
+	sudo sed -i "s/dtparam=audio=on/#dtparam=audio=on/g" $(HOST_BOOTCFG_FILE_PATH)
 	sudo sed -i "s/#dtparam=i2s=on/dtparam=i2s=on/g" $(HOST_BOOTCFG_FILE_PATH)
-	@echo "dtoverlay=i2s-mmap" | sudo tee -a $(HOST_BOOTCFG_FILE_PATH);	
+	@echo "dtoverlay=i2s-mmap" | sudo tee -a $(HOST_BOOTCFG_FILE_PATH);
 	sudo sed -i "s/#dtparam=i2c_arm=on/dtparam=i2c_arm=on/g" $(HOST_BOOTCFG_FILE_PATH)
 	sudo sed -i "s/#dtparam=spi=on/dtparam=spi=on/g" $(HOST_BOOTCFG_FILE_PATH)
 
-
 bootcfg_edit: bootcfg_sub
-	@ (	\
-	for line in $(MSCC_DTB_NAMES); 	do	\
-	   echo "$$line" ;\
-	   if grep -Fxq "$$line"  $(HOST_BOOTCFG_FILE_PATH) ; then  \
-	      echo "Found ... nothing to do";	\
-	   else  \
-	      echo "adding $$line into the config file...";	\
-	      sudo bash -c "echo "dtoverlay=$$line" >> $(HOST_BOOTCFG_FILE_PATH)"; \
-	   fi \
-	done	\
+	@ ( \
+	for line in $(MSCC_DTB_NAMES); do \
+	    echo "$$line"; \
+	    if grep -Fxq "$$line"  $(HOST_BOOTCFG_FILE_PATH) ; then \
+	        echo "Found ... nothing to do"; \
+	    else \
+	        echo "adding $$line into the config file..."; \
+	        sudo bash -c "echo "dtoverlay=$$line" >> $(HOST_BOOTCFG_FILE_PATH)"; \
+	    fi \
+	done \
 	)
 
-amazon_sub:
-	@echo "--****************************************************************************--" 
-	@echo "--****************************************************************************--" 
-	@echo " Downloading and installing Amazon Alexa Make sure you have the Amazon developer"
-	@echo " account/product info needed to install the alexa sample app"	
-	@echo "--****************************************************************************--" 
-	@echo "--****************************************************************************--" 
-	sudo chmod 777 $(AMAZON_AVS_LOCAL_DIR)/*.sh
-	sudo sed -i "/sudo apt-get upgrade -y/ d" $(AMAZON_AVS_FILE_PATH)
-	
-AvsDevid=""	
-AvsClientid=""
-AvsSecreid=""
+autostart_script:
+	@if [ ! -f $(ROOTDIR)/../\.start.sh ]; then \
+	    echo "#!/usr/bin/env bash" > $(ROOTDIR)/../\.start.sh; \
+	    echo "" >> $(ROOTDIR)/../\.start.sh; \
+	    echo "sleep 2" >> $(ROOTDIR)/../\.start.sh; \
+	    echo "cd $(ROOTDIR)/.." >> $(ROOTDIR)/../\.start.sh; \
+	    echo "make alexa_xterm" >> $(ROOTDIR)/../\.start.sh; \
+	    echo "sleep 8" >> $(ROOTDIR)/../\.start.sh; \
+	    echo "aplay $(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_01_short._TTH_.wav" >> $(ROOTDIR)/../\.start.sh; \
+	    echo "sleep 2" >> $(ROOTDIR)/../.start.sh; \
+	fi
+	@sudo chmod +x $(ROOTDIR)/../\.start.sh
+	@if [ ! -f $(HOST_USER_HOME_DIR)/\.config/lxsession/LXDE-pi/autostart.backup ]; then \
+	    cp $(HOST_USER_HOME_DIR)/\.config/lxsession/LXDE-pi/autostart $(HOST_USER_HOME_DIR)/\.config/lxsession/LXDE-pi/autostart.backup; \
+	    echo "@lxterminal -e $(ROOTDIR)/../.start.sh" >> $(HOST_USER_HOME_DIR)/\.config/lxsession/LXDE-pi/autostart; \
+	fi
 
+alexa_install:
+	@echo "--*********************************************************************************--"
+	@echo "--*********************************************************************************--"
+	@echo "-- Downloading and installing Amazon Alexa Make sure you have the Amazon developer --"
+	@echo "-- account/product info needed to install the alexa sample app                     --"
+	@echo "--                                                                                 --"
+	@echo "-- Note: Run this Makefile from the Raspberry Pi Desktop environement as the last  --"
+	@echo "-- step requires Chromium to run on the Raspberry Pi                               --"
+	@echo "--*********************************************************************************--"
+	@echo "--*********************************************************************************--"
 
-alexa_install: amazon_sub
-	@read -p "enter the device ID obtained from Amazon:" AvsDevid; \
-	echo "You entered AVS Device ID: $$AvsDevid "; \
-	read -p "enter the Client ID obtained from Amazon:" AvsClientid; \
-	echo "You entered AVS Client ID: $$AvsClientid "; \
-	read -p "enter Client Secret obtained from Amazon :" AvsSecreid; \
-	echo "You entered AVS Client secret : $$AvsClientid "; \
-	sudo sed -i "s/ProductID=.*/ProductID=$$AvsDevid/" $(AMAZON_AVS_FILE_PATH); \
-	sudo sed -i "s/ClientID=.*/ClientID=$$AvsClientid/" $(AMAZON_AVS_FILE_PATH); \
-	sudo sed -i "s/ClientSecret=.*/ClientSecret=$$AvsSecreid/" $(AMAZON_AVS_FILE_PATH); \
-	cd $(AMAZON_AVS_LOCAL_DIR) ; \
-	./automated_install.sh
+# Install all the required packages
+	sudo apt-get -y install git gcc cmake build-essential libsqlite3-dev libcurl4-openssl-dev libfaad-dev libsoup2.4-dev libgcrypt20-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-good libasound2-dev jq moreutils
+	sudo pip install commentjson
 
-	
-# make sure the default sound card is always the microsemi card	
-.PHONY: samba_sh soundcfg
+# Clone the Alexa C++ sample app (get a specific revision that is known to work)
+	@if [ ! -d  $(AMAZON_AVS_LOCAL_DIR) ]; then \
+	    mkdir $(AMAZON_AVS_LOCAL_DIR) $(AMAZON_AVS_LOCAL_DIR)/sdk-source $(AMAZON_AVS_LOCAL_DIR)/third-party; \
+	    cd $(AMAZON_AVS_LOCAL_DIR)/sdk-source; \
+	    git clone $(AMAZON_AVS_ONLINE_REPOSITORY); \
+	    cd avs-device-sdk; \
+	    git reset --hard $(AMAZON_AVS_GIT_HASH); \
+	fi
+
+# Install Portaudio
+	@if [ ! -d  $(AMAZON_AVS_LOCAL_DIR)/third-party/portaudio ]; then \
+	    cd $(AMAZON_AVS_LOCAL_DIR)/third-party; \
+	    wget -c http://www.portaudio.com/archives/pa_stable_v190600_20161030.tgz; \
+	    tar zxf pa_stable_v190600_20161030.tgz; \
+	    cd portaudio; \
+	    ./configure --without-jack; \
+	    make; \
+	fi
+
+# Install Sensory
+	@if [ ! -d  $(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi ]; then \
+	    cd $(AMAZON_AVS_LOCAL_DIR)/third-party; \
+	    git clone $(SENSORY_ALEXA_ONLINE_REPOSITORY); \
+	    rm -f alexa-rpi/models/*.*; \
+	    cp ../../apps/mscc_gr.lib alexa-rpi/models/spot-alexa-rpi-20500.snsr; \
+	    cp ../../apps/mscc_gr.lib alexa-rpi/models/spot-alexa-rpi-21000.snsr; \
+	    cp ../../apps/mscc_gr.lib alexa-rpi/models/spot-alexa-rpi-31000.snsr; \
+	    cd alexa-rpi/bin; \
+	    echo; \
+	    echo; \
+	    echo "--****************************************************************************--"; \
+	    echo "--             Read and accept Sensory's licence agreement (yes)              --"; \
+	    echo "--****************************************************************************--"; \
+	    echo; \
+	    ./license.sh; \
+	fi
+
+# Build the Alexa sample app
+	@if [ ! -d  $(AMAZON_AVS_LOCAL_DIR)/sdk-build ]; then \
+	    mkdir $(AMAZON_AVS_LOCAL_DIR)/sdk-build; \
+	    cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build; \
+	    cmake $(AMAZON_AVS_LOCAL_DIR)/sdk-source/avs-device-sdk -DSENSORY_KEY_WORD_DETECTOR=ON -DSENSORY_KEY_WORD_DETECTOR_LIB_PATH=$(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/lib/libsnsr.a -DSENSORY_KEY_WORD_DETECTOR_INCLUDE_DIR=$(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/include -DGSTREAMER_MEDIA_PLAYER=ON -DPORTAUDIO=ON -DPORTAUDIO_LIB_PATH=$(AMAZON_AVS_LOCAL_DIR)/third-party/portaudio/lib/.libs/libportaudio.a -DPORTAUDIO_INCLUDE_DIR=$(AMAZON_AVS_LOCAL_DIR)/third-party/portaudio/include; \
+	    make SampleApp -j2; \
+	fi
+
+# Get the sound files
+	@if [ ! -d  $(AMAZON_AVS_LOCAL_DIR)/application-necessities ]; then \
+	    mkdir $(AMAZON_AVS_LOCAL_DIR)/application-necessities; \
+	    cd $(AMAZON_AVS_LOCAL_DIR)/application-necessities; \
+	    mkdir sound-files; \
+	    cd sound-files; \
+	    wget -c https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/dex/alexa/alexa-voice-service/docs/audio/states/med_system_alerts_melodic_02._TTH_.mp3; \
+	    wget -c https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/dex/alexa/alexa-voice-service/docs/audio/states/med_system_alerts_melodic_02_short._TTH_.wav; \
+	    wget -c https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/dex/alexa/alexa-voice-service/docs/audio/states/med_system_alerts_melodic_01._TTH_.mp3; \
+	    wget https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/dex/alexa/alexa-voice-service/docs/audio/states/med_system_alerts_melodic_01_short._TTH_.wav; \
+	fi
+
+# Prompt the user for the Amazon tokens and update the Alexa JSON file
+	@echo
+	@echo
+	@echo "--****************************************************************************--"
+	@echo "--     Enter the device's tokens found on your Amazon developper account      --"
+	@echo "--                https://developer.amazon.com/avs/home.html                  --"
+	@echo "--****************************************************************************--"
+	@echo
+
+	@read -p "Product ID   : " productID; \
+	read -p "Client ID    : " clientID; \
+	read -p "Client secret: " clientSecret; \
+	alertsDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/alerts.db; \
+	settingsDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/settings.db; \
+	certifDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/certifiedSender.db; \
+	alarmSnd=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_01._TTH_.mp3; \
+	alarmShortSnd=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_01_short._TTH_.wav; \
+	timerSnd=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_02._TTH_.mp3; \
+	timerShortSnd=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_02_short._TTH_.wav; \
+	cat $(AMAZON_AVS_JSON_CONFIG)|grep -v '\s*//'|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.authDelegate.clientSecret="'$$clientSecret'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.authDelegate.deviceSerialNumber="1"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.authDelegate.clientId="'$$clientID'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.authDelegate.productId="'$$productID'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.authDelegate.refreshToken="{SDK_CONFIG_REFRESH_TOKEN}"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.alertsCapabilityAgent.databaseFilePath="'$$alertsDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.alertsCapabilityAgent.alarmSoundFilePath="'$$alarmSnd'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.alertsCapabilityAgent.alarmShortSoundFilePath="'$$alarmShortSnd'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.alertsCapabilityAgent.timerSoundFilePath="'$$timerSnd'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.alertsCapabilityAgent.timerShortSoundFilePath="'$$timerShortSnd'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.settings.databaseFilePath="'$$settingsDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.settings.defaultAVSClientSettings.locale="en-US"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.certifiedSender.databaseFilePath="'$$certifDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+
+# Update the refresh token
+	@echo
+	@echo
+	@echo "--****************************************************************************--"
+	@echo "--     Open Chromium (on the Pi) and navigate to \"http://localhost:3000\"      --"
+	@echo "--       Expected: \"refresh request failed with the response code 400\"        --"
+	@echo "--****************************************************************************--"
+
+	@cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build; \
+	python AuthServer/AuthServer.py
+
+	@echo
+	@echo
+	@echo "--****************************************************************************--"
+	@echo "--                 Alexa sample app autoboot (headless mode)                  --"
+	@echo "--****************************************************************************--"
+	@echo
+
+	@ ( \
+	    read -p "Do you want the Alexa sample app to autoboot [y/n]?" answer; \
+	    if [ $$answer == "y" ]; then \
+	        $(MAKE) autostart_script; \
+	    else \
+	        $(MAKE) cleanaboot_sub; \
+	    fi \
+	)
+
+	@echo
+	@echo
+	@echo "--****************************************************************************--"
+	@echo "--                   Alexa sample app installation complete                   --"
+	@echo "--****************************************************************************--"
+	@echo
+
+# make sure the default sound card is always the microsemi card
+.PHONY: samba_sh soundcfg update_sensory
 
 soundcfg:
-	@echo "--****************************************************************************--" 
-	@echo "--****************************************************************************--" 
-	@echo " configuring the host ALSA related sound configuration"
-	@echo "--****************************************************************************--" 
-	@echo "--****************************************************************************--" 
+	@echo "--****************************************************************************--"
+	@echo "--           Configuring the host ALSA related sound configuration            --"
+	@echo "--****************************************************************************--"
 	@if [ -f $(HOST_USER_HOME_DIR)/.asoundrc.backup ]; then \
-	   exit 0 ; \
-	fi	
-	
-	@if [ -f /home/$(platformUser)/.asoundrc ]; then sudo cp $(HOST_USER_HOME_DIR)/.asoundrc $(HOST_USER_HOME_DIR)/.asoundrc.backup; rm /home/$(platformUser)/.asoundrc ; \
+	    exit 0; \
 	fi
-	@printf "\npcm.dmixed {\n    ipc_key 1025\n    type dmix\n    slave {\n        pcm \"hw:sndmicrosemidac,0\"\n        channels 2\n        rate 16000\n    }\n}\n" >> $(HOST_USER_HOME_DIR)/.asoundrc
-	@printf "\npcm.dsnooped {\n    ipc_key 1027\n    type dsnoop\n    slave {\n        pcm \"hw:sndmicrosemidac,0\"\n        channels 1\n        rate 16000\n    }\n}\n" >> $(HOST_USER_HOME_DIR)/.asoundrc
+
+	@if [ -f /home/$(platformUser)/.asoundrc ]; then sudo cp $(HOST_USER_HOME_DIR)/.asoundrc $(HOST_USER_HOME_DIR)/.asoundrc.backup; rm /home/$(platformUser)/.asoundrc; \
+	fi
+	@printf "\npcm.dmixed {\n    ipc_key 1025\n    type dmix\n    slave {\n        pcm \"hw:sndmicrosemidac,0\"\n        channels 2\n        rate 48000\n    }\n}\n" >> $(HOST_USER_HOME_DIR)/.asoundrc
+	@printf "\npcm.dsnooped {\n    ipc_key 1027\n    type dsnoop\n    slave {\n        pcm \"hw:sndmicrosemidac,0\"\n        channels 1\n        rate 48000\n    }\n}\n" >> $(HOST_USER_HOME_DIR)/.asoundrc
 	@printf "\npcm.asymed {\n    type asym\n    playback.pcm \"dmixed\"\n    capture.pcm \"dsnooped\"\n}\n" >> $(HOST_USER_HOME_DIR)/.asoundrc
 	@printf "\npcm.!default {\n    type plug\n    slave.pcm \"asymed\"\n}\n" >> $(HOST_USER_HOME_DIR)/.asoundrc
 	@printf "\nctl.!default {\n    type hw\n    card sndmicrosemidac\n}\n" >> $(HOST_USER_HOME_DIR)/.asoundrc
-	@sudo cp $(HOST_USER_HOME_DIR)/.asoundrc /etc/asound.conf	
-	
+	@sudo cp $(HOST_USER_HOME_DIR)/.asoundrc /etc/asound.conf
+
+# Install and setup Samba
 samba:
 	sudo apt-get update
 	sudo apt-get install samba samba-common-bin
 	sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.old
 	sudo smbpasswd -a $(platformUser)
-	@if [ ! -d $(HOST_SAMBA_SHARE_PATH) ] ; then \
-	   mkdir $(HOST_SAMBA_SHARE_PATH); \
-	   sudo chown -R root:users $(HOST_SAMBA_SHARE_PATH); \
-	   sudo chmod -R ug=rwx,o=rx $(HOST_SAMBA_SHARE_PATH); \
+	@if [ ! -d $(HOST_SAMBA_SHARE_PATH) ]; then \
+	    mkdir $(HOST_SAMBA_SHARE_PATH); \
+	    sudo chown -R root:users $(HOST_SAMBA_SHARE_PATH); \
+	    sudo chmod -R ug=rwx,o=rx $(HOST_SAMBA_SHARE_PATH); \
 	fi
-	@sudo sed -i "s/server role = standalone server/security = user \n   server role = standalone/" $(HOST_SAMBA_CFG_PATH); 
-	@sudo sed -i "s/read only = yes/read only = no/g" $(HOST_SAMBA_CFG_PATH); 
+	@sudo sed -i "s/server role = standalone server/security = user \n   server role = standalone/" $(HOST_SAMBA_CFG_PATH);
+	@sudo sed -i "s/read only = yes/read only = no/g" $(HOST_SAMBA_CFG_PATH);
 	@echo "[shares]" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
 	@echo "   comment = Public Storage" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
 	@echo "   path = $(HOST_SAMBA_SHARE_PATH)" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
@@ -283,19 +418,43 @@ samba:
 	@echo "   read only = no" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
 	sudo /etc/init.d/samba restart
 
+# Update the Sensory license
+update_sensory:
+	@cd $(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi; \
+	git reset --hard; \
+	git pull; \
+	rm -f models/*.*; \
+	cp ../../../apps/mscc_gr.lib models/spot-alexa-rpi-20500.snsr; \
+	cp ../../../apps/mscc_gr.lib models/spot-alexa-rpi-21000.snsr; \
+	cp ../../../apps/mscc_gr.lib models/spot-alexa-rpi-31000.snsr; \
+	cd bin; \
+	echo; \
+	echo; \
+	echo "--****************************************************************************--"; \
+	echo "--             Read and accept Sensory's licence agreement (yes)              --"; \
+	echo "--****************************************************************************--"; \
+	echo; \
+	./license.sh; \
+	rm -rf $(AMAZON_AVS_LOCAL_DIR)/sdk-build
+	$(MAKE) alexa_install
+
 message:
-	@echo "--****************************************************************************--" 
-	@echo "--****************************************************************************--" 
-	@echo " System setup completed successfully...."
-	@echo " NOTE: For the changes made to the host to take effect Please do a:  sudo reboot "
-	@echo "--****************************************************************************--" 
-	@echo "--****************************************************************************--" 
+	@echo "--*********************************************************************************--"
+	@echo "--*********************************************************************************--"
+	@echo "--                      System setup completed successfully...                     --"
+	@echo "-- NOTE: For the changes made to the host to take effect Please do a:  sudo reboot --"
+	@echo "--*********************************************************************************--"
+	@echo "--*********************************************************************************--"
 
-.PHONY: alexa_exec
+.PHONY: alexa_exec alexa_xterm
 
+# Start the sample app in a separate terminal
+alexa_xterm:
+	@sudo cp /etc/asound.conf $(HOST_USER_HOME_DIR)/.asoundrc
+	@xterm -hold -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build/SampleApp/src/; TZ=UTC ./SampleApp $(AMAZON_AVS_JSON_CONFIG) $(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/models; bash"' &
 
+# Start the sample app in the same terminal
 alexa_exec:
-	@sudo cp /etc/asound.conf $(HOST_USER_HOME_DIR)/.asoundrc 
-	xterm -hold -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/samples/companionService && npm start; exec bash"' &
-	xterm -hold -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/samples/javaclient && mvn exec:exec; exec bash"' &
-	xterm -hold -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/samples/wakeWordAgent/src && ./wakeWordAgent -e sensory; exec bash"' &
+	@sudo cp /etc/asound.conf $(HOST_USER_HOME_DIR)/.asoundrc
+	@cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build/SampleApp/src/; \
+	TZ=UTC ./SampleApp $(AMAZON_AVS_JSON_CONFIG) $(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/models

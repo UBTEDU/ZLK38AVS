@@ -25,17 +25,12 @@ def FormatNumber(res_list):
     return number
 
 # ****************************************************************************
-def Pairwise(iterable):
-    a = iter(iterable)
-    return izip(a, a)
-
-# ****************************************************************************
 def SpiBufferRead(handle, address, numBytes):
     bufferString = ""
 
     byteList = HBI_read(handle, address, numBytes)
-    for msb, lsb in Pairwise(byteList):
-        bufferString += "%02X%02X" % (msb, lsb)
+    for byteEl in byteList:
+        bufferString += "%02X" % byteEl
 
     return bufferString
 
@@ -48,6 +43,23 @@ def SpiBufferWrite(handle, address, bufferString):
         byteList.append(int(bufferString[i * 2: i * 2 + 2], 16))
 
     HBI_write(handle, address, byteList)
+
+# ****************************************************************************
+def SpiHwBufferRead(handle, address, numBytes):
+    bufferString = ""
+
+    # Setup the start address using the page 255 scheme
+    addressSeq = struct.unpack("4B", struct.pack(">I", address))
+    hbiOffset = addressSeq[3]
+    HBI_write(handle, 0x00C, addressSeq)
+
+    # Read the requested bytes
+    byteList = HBI_read(handle, 0xFF00 + hbiOffset, numBytes)
+    for byteEl in byteList:
+        bufferString += "%02X" % byteEl
+
+    return bufferString
+
 # ****************************************************************************
 def FirmwareLoading(handle, type, cmd):
 
@@ -144,6 +156,9 @@ def ParseCmd(handle, header, cmd):
         # Buffer write
         retval = SpiBufferWrite(handle, int(cmd[0: 3], 16), cmd[3:])
         retval = "OK"
+    elif (header[0: 2] == "HR"):
+        # Hardware buffer read (HBI 255 access)
+        retval = SpiHwBufferRead(handle, int(cmd[0: 8], 16), int(cmd[8: 10], 16))
     elif (header[0: 2] == "FA") or (header[0: 2] == "FB") or (header[0: 2] == "FC"):
         retval = FirmwareLoading(handle, header[0: 2], cmd)
     elif (header[0: 2] == "ER"):
