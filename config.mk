@@ -20,8 +20,7 @@ AMAZON_AVS_ONLINE_REPOSITORY =https://github.com/alexa/avs-device-sdk
 SENSORY_ALEXA_ONLINE_REPOSITORY =https://github.com/Sensory/alexa-rpi
 AMAZON_AVS_LOCAL_DIR ?=$(ROOTDIR)/../amazon_avs_cpp
 AMAZON_AVS_JSON_CONFIG =$(AMAZON_AVS_LOCAL_DIR)/sdk-build/Integration/AlexaClientSDKConfig.json
-# Amazon 1.2.1 AVS SDK
-AMAZON_AVS_GIT_HASH =a2b84e329c71ecb18e07ba0e852921e96c4b4fc6
+AMAZON_AVS_SDK_REL=v1.3.tar.gz
 
 HOST_PI_IMAGE_VER :=`cat /etc/os-release`
 HOST_KHEADERS_DIR =/lib/modules/`uname -r`/build
@@ -45,16 +44,11 @@ MSCC_DAC_OVERLAY_DTB =microsemi-dac-overlay
 MSCC_SPIMULTI_DTB =microsemi-spi-multi-tw-overlay
 MSCC_SPI_DTB =microsemi-spi-overlay
 
-#TW configuration option for MICs 180 or 360 degree
-MSCC_TW_CONFIG_SELECT =180
+#TW configuration option for MICs (0: 1 mic, 1: 2 mics, 2: 3 mics)
+MSCC_TW_CONFIG_SELECT_IDX =2
 
 #-------DO NOT MAKE CHANGE BELOW this line ---------------------------
-
-ifeq ($(MSCC_TW_CONFIG_SELECT),180)
-	MSCC_TW_CONFIG_SELECT=$(MSCC_APPS_FWLD) 0
-else
-	MSCC_TW_CONFIG_SELECT=$(MSCC_APPS_FWLD) 1
-endif
+MSCC_TW_CONFIG_SELECT =$(MSCC_APPS_FWLD) $(MSCC_TW_CONFIG_SELECT_IDX)
 
 # if the raspberrypi kernel headers needed to compile the sdk do not exist fetch them
 .PHONY: pi_kheaders avs_git alexa_install
@@ -84,17 +78,21 @@ startupcfg:
 	@if [ ! -f $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ]; then \
 	    sudo cp $(HOST_USER_APPS_START_CFG_FILE_PATH) $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ; \
 	fi
-	@ (	\
-	if grep -e "$(MSCC_APPS_FWLD) 0" $(HOST_USER_APPS_START_CFG_FILE_PATH); then  \
-	    echo "Found 0, updating ... "$(MSCC_TW_CONFIG_SELECT);	\
-	    sudo sed -i "s/$(MSCC_APPS_FWLD) 0/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
-	elif grep -e "$(MSCC_APPS_FWLD) 1" $(HOST_USER_APPS_START_CFG_FILE_PATH); then  \
-	    echo "Found 1, updating ... "$(MSCC_TW_CONFIG_SELECT);	\
-	    sudo sed -i "s/$(MSCC_APPS_FWLD) 1/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	@ ( \
+	if grep -e "echo \"7\" > /sys/class/gpio/export" $(HOST_USER_APPS_START_CFG_FILE_PATH); then \
+	    echo "Found, not updating CS1 workaround"; \
 	else \
-	    echo "not Found , updating ... "$(MSCC_TW_CONFIG_SELECT); \
-	    sudo sed -i "s/exit 0/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
-	    echo "exit 0" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "Not found , updating CS1 workaround"; \
+	    sudo sed -i "s/^exit 0/echo \"7\" > \/sys\/class\/gpio\/export\necho \"1\" > \/sys\/class\/gpio\/gpio7\/value\n\nexit 0/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	fi \
+	)
+	@ ( \
+	if grep -e "$(MSCC_APPS_FWLD) [0-2]" $(HOST_USER_APPS_START_CFG_FILE_PATH); then \
+	    echo "Found, updating ... "$(MSCC_TW_CONFIG_SELECT); \
+	    sudo sed -i "s/$(MSCC_APPS_FWLD) [0-2]/$(MSCC_TW_CONFIG_SELECT)/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	else \
+	    echo "Not found , updating ... "$(MSCC_TW_CONFIG_SELECT); \
+	    sudo sed -i "s/^exit 0/$(MSCC_TW_CONFIG_SELECT)\n\nexit 0/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
 	fi \
 	)
 
@@ -120,8 +118,8 @@ cleanmod_sub:
 	done \
 	)
 
-.PHONY: cleanaboot_sub cleansnd_sub cleanprof_sub cleanrc_sub cleanboot_sub cleanmodcfg_sub bootcfg_sub message autostart_script
-cleanaboot_sub:
+.PHONY: disable_autostart cleansnd_sub cleanprof_sub cleanrc_sub cleanboot_sub cleanmodcfg_sub bootcfg_sub message enable_autostart set_serial
+disable_autostart:
 	@if [ -f $(ROOTDIR)/../\.start.sh ]; then \
 	    rm $(ROOTDIR)/../\.start.sh; \
 	fi
@@ -218,7 +216,7 @@ bootcfg_edit: bootcfg_sub
 	done \
 	)
 
-autostart_script:
+enable_autostart:
 	@if [ ! -f $(ROOTDIR)/../\.start.sh ]; then \
 	    echo "#!/usr/bin/env bash" > $(ROOTDIR)/../\.start.sh; \
 	    echo "" >> $(ROOTDIR)/../\.start.sh; \
@@ -235,6 +233,11 @@ autostart_script:
 	    echo "@lxterminal -e $(ROOTDIR)/../.start.sh" >> $(HOST_USER_HOME_DIR)/\.config/lxsession/LXDE-pi/autostart; \
 	fi
 
+set_serial:
+	@serial=`cat /proc/cpuinfo | grep Serial | cut -d ' ' -f 2`; \
+	echo "Updated AVS serial number to: $$serial" ; \
+	jq '.authDelegate.deviceSerialNumber="'$$serial'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG)
+
 alexa_install:
 	@echo "--*********************************************************************************--"
 	@echo "--*********************************************************************************--"
@@ -247,16 +250,21 @@ alexa_install:
 	@echo "--*********************************************************************************--"
 
 # Install all the required packages
-	sudo apt-get -y install git gcc cmake build-essential libsqlite3-dev libcurl4-openssl-dev libfaad-dev libsoup2.4-dev libgcrypt20-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-good libasound2-dev jq moreutils
-	sudo pip install commentjson
-
-# Clone the Alexa C++ sample app (get a specific revision that is known to work)
+# Get the specified tag of the  Alexa C++ sample app and add code to turn on an LED when Alexa is detected
 	@if [ ! -d  $(AMAZON_AVS_LOCAL_DIR) ]; then \
+	    sudo apt-get update; \
+	    sudo apt-get -y install git gcc cmake build-essential libsqlite3-dev libcurl4-openssl-dev libfaad-dev libsoup2.4-dev libgcrypt20-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-good libasound2-dev doxygen jq moreutils; \
+	    sudo pip install commentjson; \
 	    mkdir $(AMAZON_AVS_LOCAL_DIR) $(AMAZON_AVS_LOCAL_DIR)/sdk-source $(AMAZON_AVS_LOCAL_DIR)/third-party; \
 	    cd $(AMAZON_AVS_LOCAL_DIR)/sdk-source; \
-	    git clone $(AMAZON_AVS_ONLINE_REPOSITORY); \
-	    cd avs-device-sdk; \
-	    git reset --hard $(AMAZON_AVS_GIT_HASH); \
+	    mkdir avs-device-sdk; \
+	    wget https://github.com/alexa/avs-device-sdk/archive/$(AMAZON_AVS_SDK_REL); \
+	    tar -xf $(AMAZON_AVS_SDK_REL) -C avs-device-sdk --strip-components 1; \
+	    rm $(AMAZON_AVS_SDK_REL); \
+	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/CMakeLists.txt ./avs-device-sdk/SampleApp/src/; \
+	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/main.cpp ./avs-device-sdk/SampleApp/src/; \
+	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/UIManager.cpp ./avs-device-sdk/SampleApp/src/; \
+	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/SampleApplication.h ./avs-device-sdk/SampleApp/include/SampleApp/; \
 	fi
 
 # Install Portaudio
@@ -295,15 +303,10 @@ alexa_install:
 	    make SampleApp -j2; \
 	fi
 
-# Get the sound files
+# Create a folder to store the db files
 	@if [ ! -d  $(AMAZON_AVS_LOCAL_DIR)/application-necessities ]; then \
 	    mkdir $(AMAZON_AVS_LOCAL_DIR)/application-necessities; \
 	    cd $(AMAZON_AVS_LOCAL_DIR)/application-necessities; \
-	    mkdir sound-files; \
-	    cd sound-files; \
-	    wget -c https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/dex/alexa/alexa-voice-service/docs/audio/states/med_system_alerts_melodic_02._TTH_.mp3; \
-	    wget -c https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/dex/alexa/alexa-voice-service/docs/audio/states/med_system_alerts_melodic_02_short._TTH_.wav; \
-	    wget -c https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/dex/alexa/alexa-voice-service/docs/audio/states/med_system_alerts_melodic_01._TTH_.mp3; \
 	    wget https://images-na.ssl-images-amazon.com/images/G/01/mobile-apps/dex/alexa/alexa-voice-service/docs/audio/states/med_system_alerts_melodic_01_short._TTH_.wav; \
 	fi
 
@@ -322,10 +325,6 @@ alexa_install:
 	alertsDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/alerts.db; \
 	settingsDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/settings.db; \
 	certifDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/certifiedSender.db; \
-	alarmSnd=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_01._TTH_.mp3; \
-	alarmShortSnd=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_01_short._TTH_.wav; \
-	timerSnd=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_02._TTH_.mp3; \
-	timerShortSnd=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_02_short._TTH_.wav; \
 	cat $(AMAZON_AVS_JSON_CONFIG)|grep -v '\s*//'|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.authDelegate.clientSecret="'$$clientSecret'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.authDelegate.deviceSerialNumber="1"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
@@ -333,10 +332,6 @@ alexa_install:
 	jq '.authDelegate.productId="'$$productID'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.authDelegate.refreshToken="{SDK_CONFIG_REFRESH_TOKEN}"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.alertsCapabilityAgent.databaseFilePath="'$$alertsDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
-	jq '.alertsCapabilityAgent.alarmSoundFilePath="'$$alarmSnd'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
-	jq '.alertsCapabilityAgent.alarmShortSoundFilePath="'$$alarmShortSnd'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
-	jq '.alertsCapabilityAgent.timerSoundFilePath="'$$timerSnd'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
-	jq '.alertsCapabilityAgent.timerShortSoundFilePath="'$$timerShortSnd'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.settings.databaseFilePath="'$$settingsDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.settings.defaultAVSClientSettings.locale="en-US"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.certifiedSender.databaseFilePath="'$$certifDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
@@ -362,11 +357,14 @@ alexa_install:
 	@ ( \
 	    read -p "Do you want the Alexa sample app to autoboot [y/n]?" answer; \
 	    if [ $$answer == "y" ]; then \
-	        $(MAKE) autostart_script; \
+	        $(MAKE) enable_autostart; \
 	    else \
-	        $(MAKE) cleanaboot_sub; \
+	        $(MAKE) disable_autostart; \
 	    fi \
 	)
+
+# Update the serial number
+	@$(MAKE) set_serial
 
 	@echo
 	@echo

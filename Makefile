@@ -43,7 +43,7 @@ avs_config: alexa_install
 start_alexa: alexa_exec
 
 # undo everything done by the make all
-cleanall: cleanaboot_sub cleanmod_sub cleanov_sub cleansnd_sub cleanprof_sub cleanrc_sub cleanboot_sub
+cleanall: disable_autostart cleanmod_sub cleanov_sub cleansnd_sub cleanprof_sub cleanrc_sub cleanboot_sub
 	rm -rf $(INSTALL_MSCC_LOCAL_LIB_PATH)
 	rm -rf $(AMAZON_AVS_LOCAL_DIR)
 	$(MAKE) -C $(ROOTDIR) clean
@@ -65,6 +65,8 @@ swig:
 
 help:
 	@echo "-----------------------------------------------------------------------------------------------"
+	@echo "| Microsemi AVS Kit software version 2.0.0
+	@echo "-----------------------------------------------------------------------------------------------"
 	@echo "| SHELL="$(SHELL)
 	@echo "| ROOTDIR="$(ROOTDIR)
 	@echo "| SDKDIRS="$(SDKDIRS)
@@ -75,8 +77,8 @@ help:
 	@echo "| USERPROFILE="$(HOST_USER_PROF_START_CFG_FILE_PATH)
 	@echo "| USER:GROUP="$(platformUser):$(platformGroup)
 	@echo "| To compile the Microsemi Voice Processing SDK: make vproc_sdk or make"
-	@echo "| To compile the SDK, comfigure the host to bootup with the SDK driver/apps, download/compile Amazon Alexa : make all"
-	@echo "| To compile the SDK, and comfigure the host to bootup with the SDK driver/apps : make host"
+	@echo "| To compile the SDK, configure the host to bootup with the SDK driver/apps, download/compile Amazon Alexa : make all"
+	@echo "| To compile the SDK, and configure the host to bootup with the SDK driver/apps : make host"
 	@echo "| To undo everything done by the SDK compilation and install (Amazon alexa is not removed): make clean"
 	@echo "| To undo everything done by make all compilation: make cleanall"
 	@echo "-----------------------------------------------------------------------------------------------"

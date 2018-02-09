@@ -46,8 +46,12 @@ typedef uint16_t dev_addr_t;
 #ifndef __bool_true_and_false_are_defined
 #define __bool_true_and_false_are_defined
 
-#define TRUE        1
-#define FALSE      (!TRUE)
+#ifndef TRUE
+    #define TRUE       1 
+#endif
+#ifndef FALSE
+    #define FALSE      (!TRUE)
+#endif
 #endif
 
 /* typedef for SSL port and lock handle. User can redefine to any as per their system need */

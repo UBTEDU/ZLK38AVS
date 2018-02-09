@@ -8,6 +8,14 @@ Please see [Howto](https://github.com/Microsemi/ZLK38AVS/wiki/howto) for quick s
 
 
 ## What’s new?
+**February 9, 2018:**
+* V2.0.0: 
+  * Updated the Sensory search order
+  * Added control of an LED to reflect the keyword detection
+  * Updated the Amazon Sample App to 1.3.0
+  * Added compatibility for the ZLE38AVS Rev 401 board
+
+
 **November 22, 2017:**
 * V1.1.0: New Amazon Sample application
 
@@ -18,7 +26,7 @@ Please see [Howto](https://github.com/Microsemi/ZLK38AVS/wiki/howto) for quick s
 
 ## Important considerations
 * IMPORTANT: For added convenience and to ensure an optimum compatibility between all the softwares we created a pre-built SD card image:   
-[Microsemi AVS kit SD card image](https://mscc365-my.sharepoint.com/personal/simon_dumortier_microsemi_net/_layouts/15/guestaccess.aspx?docid=01b868a2c6dc24d5a8f3e239a5a99501b&authkey=AYlXxvfaxdDmfC6UObHvag8&e=4047cf4b1d9d474dbe0265851e257576)   
+[Microsemi AVS kit SD card image](https://www.dropbox.com/s/pekme6h0ay8dkzo/Raspbian_ZLK38AVS_V2-0-0.zip?dl=0)   
 This zipped image can be directly loaded onto an SD card using [Etcher](https://etcher.io/)   
 SSH and VNC are both enabled with the following credentials:
     - Hostname: Microsemi-AVS.local
@@ -43,13 +51,6 @@ SSH and VNC are both enabled with the following credentials:
     sudo rpi-update a6b3e852ca70f2a12850b4542438583cc3b29788
     ```
 * IMPORTANT: It is not recommended to use this demonstration platform in Headless Mode (see "Alexa sample app autoboot (headless mode)" during the installation) as it is always better to monitor the Amazon Sample App interface
-* To update from the previous Java sample application, use the following commands (warning: the new version requires Raspbian Stretch):
-    ```
-    cd ZLK38AVS
-    make cleanall
-    git pull
-    make all
-    ```
 * The Sensory wake word engine included with this project is time-limited: code linked against it will stop working when the library expires. The library included in this repository will, at all times, have an expiration date that is at least 120 days in the future. Use the following command to renew the license (from the ZLK38AVS folder):
     ```
     make update_sensory
