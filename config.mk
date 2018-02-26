@@ -7,7 +7,7 @@
 #
 #
 # --------------------------------------------------------------
-export INSTALL_MSCC_MOD_DIR =/lib/modules/`uname -r`/kernel/drivers
+export INSTALL_MSCC_MOD_DIR =/usr/local/avs
 export INSTALL_MSCC_OVERLAYS_DIR =/boot/overlays
 export INSTALL_MSCC_APPS_PATH =/usr/local/bin/
 export HBI_MOD_LOCAL_PATH =$(ROOTDIR)/lnxdrivers/lnxhbi/lnxkernel
@@ -73,19 +73,16 @@ pi_kheaders :
 startupcfg:
 	@if [ ! -f $(HOST_USER_HOME_DIR)/.profile.backup ]; then \
 	    sudo cp $(HOST_USER_PROF_START_CFG_FILE_PATH) $(HOST_USER_HOME_DIR)/.profile.backup ; \
-	    echo "sudo chown -R $(platformUser):$(platformGroup) /dev/$(MSCC_HBI_MOD)" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
+	    echo "if ! lsmod | grep -q hbi ; then" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
+	    echo "    sudo insmod $(INSTALL_MSCC_MOD_DIR)/$(MSCC_HBI_MOD).ko" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
+	    echo "    sudo insmod $(INSTALL_MSCC_MOD_DIR)/$(MSCC_SND_COD_MOD).ko" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
+	    echo "    sudo insmod $(INSTALL_MSCC_MOD_DIR)/$(MSCC_SND_MAC_MOD).ko" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
+	    echo "fi" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
+	    echo "sudo chown -R $(platformUser):$(platformGroup) /dev/$(MSCC_HBI_MOD)*" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
 	fi
 	@if [ ! -f $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ]; then \
 	    sudo cp $(HOST_USER_APPS_START_CFG_FILE_PATH) $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ; \
 	fi
-	@ ( \
-	if grep -e "echo \"7\" > /sys/class/gpio/export" $(HOST_USER_APPS_START_CFG_FILE_PATH); then \
-	    echo "Found, not updating CS1 workaround"; \
-	else \
-	    echo "Not found , updating CS1 workaround"; \
-	    sudo sed -i "s/^exit 0/echo \"7\" > \/sys\/class\/gpio\/export\necho \"1\" > \/sys\/class\/gpio\/gpio7\/value\n\nexit 0/g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
-	fi \
-	)
 	@ ( \
 	if grep -e "$(MSCC_APPS_FWLD) [0-2]" $(HOST_USER_APPS_START_CFG_FILE_PATH); then \
 	    echo "Found, updating ... "$(MSCC_TW_CONFIG_SELECT); \
@@ -97,6 +94,10 @@ startupcfg:
 	)
 
 install_sub:
+	@if [ -d $(INSTALL_MSCC_MOD_DIR) ]; then \
+	    sudo rm -rf $(INSTALL_MSCC_MOD_DIR); \
+	fi
+	sudo mkdir $(INSTALL_MSCC_MOD_DIR)
 	sudo install -m 0755 $(HBI_MOD_LOCAL_PATH)/*.ko $(INSTALL_MSCC_MOD_DIR)
 	sudo install -m 0755 $(MSCC_LOCAL_LIB_PATH)/*.ko $(INSTALL_MSCC_MOD_DIR)
 	sudo install -m 0755 $(MSCC_LOCAL_LIB_PATH)/*.dtbo $(INSTALL_MSCC_OVERLAYS_DIR)
@@ -105,18 +106,7 @@ install_sub:
 .PHONY: modcfg_edit bootcfg_edit startupcfg cleanmod_sub cleanov_sub modcfg_cp
 cleanmod_sub:
 	sudo rm $(INSTALL_MSCC_APPS_PATH)/$(MSCC_APPS_FWLD)
-	@ ( \
-	for line in $(MSCC_MOD_NAMES); 	do	\
-	    echo "$$line" ;\
-	    if grep -Fxq "$$line"  $(HOST_MODULES_FILE_PATH) ; then \
-	        echo "Found, then removing $$line..."; \
-	        sudo sed -i "/$$line/ d" $(HOST_MODULES_FILE_PATH); \
-	        TEMPVAR=$$line.ko; \
-	        echo "$$TEMPVAR ..." ; \
-	        sudo rm $(INSTALL_MSCC_MOD_DIR)/$$TEMPVAR; \
-	    fi \
-	done \
-	)
+	sudo rm -rf $(INSTALL_MSCC_MOD_DIR)
 
 .PHONY: disable_autostart cleansnd_sub cleanprof_sub cleanrc_sub cleanboot_sub cleanmodcfg_sub bootcfg_sub message enable_autostart set_serial
 disable_autostart:
@@ -262,9 +252,8 @@ alexa_install:
 	    tar -xf $(AMAZON_AVS_SDK_REL) -C avs-device-sdk --strip-components 1; \
 	    rm $(AMAZON_AVS_SDK_REL); \
 	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/CMakeLists.txt ./avs-device-sdk/SampleApp/src/; \
-	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/main.cpp ./avs-device-sdk/SampleApp/src/; \
-	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/UIManager.cpp ./avs-device-sdk/SampleApp/src/; \
-	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/SampleApplication.h ./avs-device-sdk/SampleApp/include/SampleApp/; \
+	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/*.cpp ./avs-device-sdk/SampleApp/src/; \
+	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/*.h ./avs-device-sdk/SampleApp/include/SampleApp/; \
 	fi
 
 # Install Portaudio

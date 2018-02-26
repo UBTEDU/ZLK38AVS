@@ -3,19 +3,15 @@ include $(ROOTDIR)/config.mk
 
 LOCAL_PWD=$(ROOTDIR)/platform/$(PLATFORM)/driver/ssl
 
-obj-y := libssl.o
+obj-y := libssl_port.o
 
-ifeq ($(HBI),I2C)
-	libssl-y := hal_i2c.o 
-else
-	libssl-y := hal_spi.o
-endif
+libssl_port-y := hal_port.o
 
-libssl-y += ssl.o
+libssl_port-y += ssl_port.o
 
 all:help
 	make -C $(KSRC) M=$(LOCAL_PWD)
-	mv libssl.o $(INSTALL_LIB_PATH)/ssl.o_shipped
+	mv libssl_port.o $(INSTALL_LIB_PATH)/ssl_port.o_shipped
 
 help:
 	@echo "$(VPROC_DEV_BUS)="$(VPROC_DEV_BUS)

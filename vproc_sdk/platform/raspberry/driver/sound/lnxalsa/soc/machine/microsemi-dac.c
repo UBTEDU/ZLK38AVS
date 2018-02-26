@@ -66,7 +66,7 @@ static struct snd_soc_dai_link snd_microsemi_dac_dai[] = {
     .platform_name  = "bcm2708-i2s.0",
     .codec_name     = "zl380-codec",
     .dai_fmt        = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
-                        SND_SOC_DAIFMT_CBM_CFM,
+                        SND_SOC_DAIFMT_CBM_CFM,  /*_CBM_CFM: Codec is MAster for clock and FS. For Codec slave: use _CBS_CFS*/
     .ops            = &snd_microsemi_dac_ops,
     .init           = snd_microsemi_dac_init,
     },

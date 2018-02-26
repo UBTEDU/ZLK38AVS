@@ -28,13 +28,8 @@
 
 #include <memory>
 
-extern "C" {
-    #include "typedefs.h"
-    #include "chip.h"
-    #include "hbi.h"
-}
-
-extern hbi_handle_t hbiHandle;
+#include "Zle38Avs.h"
+extern Zle38Avs Zle38AvsBoard;
 
 namespace alexaClientSDK {
 namespace sampleApp {

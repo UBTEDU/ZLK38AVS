@@ -16,6 +16,7 @@ if FW_LOAD:
     print "\nFirmware and configuration loading example:"
     try:
         # Convert the S3 in BIN
+        # Change the line below to point to an actual firmware file
         fw_bin = GetFirmwareBinFile("Microsemi_ZLS38063.1_E0_10_0_firmware.s3", 38063, 64)
         print "    - Firmware converted"
 
@@ -25,7 +26,6 @@ if FW_LOAD:
 
 # Init the HBI driver
 cfg = hbi_dev_cfg_t();
-HBI_init(None)
 handle = HBI_open(cfg)
 
 try:
@@ -86,4 +86,3 @@ except ValueError as err:
 
 # Close HBI driver
 HBI_close(handle)
-HBI_term()

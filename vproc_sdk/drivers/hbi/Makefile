@@ -10,7 +10,7 @@ obj-y := libhbi.o
 ifeq ($(TARGET),TW)
 	libhbi-y := hbi_tw.o 	
 endif
-
+libhbi-y += hbi_ssl.o
 libhbi-y += hbi.o
 
 all:

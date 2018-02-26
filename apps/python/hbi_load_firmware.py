@@ -400,8 +400,7 @@ ex: Load a firmware and configuration from flash slot 3:
 
     # Init the HBI driver
     cfg = hbi_dev_cfg_t();
-    cfg.dev_addr = args.chipSelect
-    HBI_init(None)
+    cfg.deviceId = args.chipSelect
     handle = HBI_open(cfg)
     print ("Info - Device open on SPI CS%d" % args.chipSelect)
 
@@ -459,4 +458,3 @@ ex: Load a firmware and configuration from flash slot 3:
 
     # Close HBI driver
     HBI_close(handle)
-    HBI_term()

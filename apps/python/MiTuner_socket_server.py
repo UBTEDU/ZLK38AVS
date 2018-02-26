@@ -184,7 +184,6 @@ if __name__ == "__main__":
 
     # Init the HBI driver
     cfg = hbi_dev_cfg_t();
-    HBI_init(None)
     handle = HBI_open(cfg)
 
     try:
@@ -235,5 +234,3 @@ if __name__ == "__main__":
 
     # Close HBI driver
     HBI_close(handle)
-    HBI_term()
-

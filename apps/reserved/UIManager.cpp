@@ -18,17 +18,13 @@
 #include <sstream>
 
 #include "SampleApp/UIManager.h"
-#include "SampleApp/SampleApplication.h"
 
 #include <AVSCommon/SDKInterfaces/DialogUXStateObserverInterface.h>
 
 #include "SampleApp/ConsolePrinter.h"
 
-extern "C" {
-    #include "typedefs.h"
-    #include "chip.h"
-    #include "hbi.h"
-}
+#include "SampleApp/SampleApplication.h"
+#include "SampleApp/Zle38Avs.h"
 
 namespace alexaClientSDK {
 namespace sampleApp {
@@ -203,8 +199,6 @@ void UIManager::microphoneOn() {
 }
 
 void UIManager::printState() {
-    user_buffer_t buf[2];
-
     if (m_connectionStatus == avsCommon::sdkInterfaces::ConnectionStatusObserverInterface::Status::DISCONNECTED) {
         ConsolePrinter::prettyPrint("Client not connected!");
     } else if (m_connectionStatus == avsCommon::sdkInterfaces::ConnectionStatusObserverInterface::Status::PENDING) {
@@ -212,24 +206,23 @@ void UIManager::printState() {
     } else if (m_connectionStatus == avsCommon::sdkInterfaces::ConnectionStatusObserverInterface::Status::CONNECTED) {
         switch (m_dialogState) {
             case DialogUXState::IDLE:
-                // Turn off the LED (GPIO 8)
-                HBI_read(hbiHandle, 0x2DA, buf, 2);
-                buf[0] &= ~0x01;
-                HBI_write(hbiHandle, 0x2DA, buf, 2);
+                Zle38AvsBoard.StopSpeaking();
                 ConsolePrinter::prettyPrint("Alexa is currently idle!");
                 return;
             case DialogUXState::LISTENING:
-                // Turn on the LED (GPIO 8)
-                HBI_read(hbiHandle, 0x2DA, buf, 2);
-                buf[0] |= 0x01;
-                HBI_write(hbiHandle, 0x2DA, buf, 2);
+                Zle38AvsBoard.StopSpeaking();
+                Zle38AvsBoard.StartDoa();
                 ConsolePrinter::prettyPrint("Listening...");
                 return;
             case DialogUXState::THINKING:
+                Zle38AvsBoard.StopDoa();
+                Zle38AvsBoard.StartThinking();
                 ConsolePrinter::prettyPrint("Thinking...");
                 return;
                 ;
             case DialogUXState::SPEAKING:
+                Zle38AvsBoard.StopThinking();
+                Zle38AvsBoard.StartSpeaking();
                 ConsolePrinter::prettyPrint("Speaking...");
                 return;
             /*

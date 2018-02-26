@@ -56,6 +56,7 @@
 
 #include "ssl.h"
 
+#define INIT_TERM_AUTO
 /*! \ingroup hbi
  * \{
  *
@@ -132,6 +133,16 @@ typedef enum
     */
     HBI_CMD_START_FWR,
 
+    /*!< Saves current configuration record in device memory to flash.
+       connected to voice processor device. There must be a firmware image already stored
+       on the flash. OTherwise this is not supported
+       input args : none
+       output args: pointer to an unsigned int to pass back uploaded image number
+                    (optional)
+    */
+   
+    HBI_CMD_SAVE_CFG_TO_FLASH, 
+
     /*! End marker for Host Command List */
     HBI_CMD_END
 }hbi_cmd_t;
@@ -186,11 +197,11 @@ typedef enum
  */
 typedef struct 
 {
-    uint8_t  dev_addr; /*!< device address. can be i2c complaint or spi chip 
-                          select id*/
-    uint8_t *pDevName; /*!< an optional pointer to device name */
-    uint8_t  bus_num;  /*!< bus number device physically present on */
-    ssl_lock_handle_t dev_lock; /*!< lock to serialise device access */
+    tw_device_id_t deviceId;  /*a number from 0 to MAX_NUM_DEVS-1 identifying the device*/
+    uint8_t *pDevName; /*!< an optional pointer to device name - Pass NULL for it */
+    uint8_t  dev_addr; /* Must not be referenced by the user-app- used internally by the SDK*/
+    uint8_t  bus_num;   /* Must not be referenced by the user-app- used internally by the SDK*/
+    ssl_lock_handle_t dev_lock;  /* Must not be referenced by the user-app- used internally by the SDK*/
 }hbi_dev_cfg_t;
 
 /*! \brief describes buffer format to be used by user to pass any  data to
@@ -228,16 +239,30 @@ typedef struct
    int    hdr_len;    /*!< length of header */
 }hbi_img_hdr_t;
 
+typedef struct 
+{
+    uint16_t chip; /*!< CHIP name EX: 38051*/
+    uint8_t  dev_addr; /*!< device address. can be i2c address or spi chip 
+                          select id*/
+    uint8_t  bus_num;  /*!< bus number device physically present on */
+    uint8_t  isboot;   /*TRUE to boot load images into the device at power up, FALSE not to boot load the device*/
+    uint8_t  *pFirmware; /*a pointer to either the filename if in *.bin format or data array  if in c code format*/
+    uint8_t  *pConfig;   /*a pointer to either the filename if in *.cr2 format or data array  if in c code format*/
+    ssl_lock_handle_t dev_lock; /*!< lock to serialise device access */
+    uint8_t  isImage_typeC;   /*0: for static *.bin, 1: for *.h */
+}hbi_dev_info_t;
+
 /*! \brief HBI Handle updated by driver during HBI_Open() call and 
  *                      used in further driver calls
  */
 typedef uint32_t      hbi_handle_t;
-
+typedef int           hbi_device_id_t;
 /*! \brief basic data type for buffer as should be used by user
                          in call to HBI_read() ,HBI_write()
  */
 typedef unsigned char user_buffer_t;
 
+hbi_status_t HBI_dev_info(hbi_handle_t handle);
 /*! \fn  hbi_status_t HBI_init(const hbi_init_cfg_t *)
  *
  * \brief Driver initialization function.
@@ -330,7 +355,7 @@ hbi_status_t HBI_close(hbi_handle_t handle);
 hbi_status_t HBI_reset(hbi_handle_t handle, hbi_rst_mode_t mode);
 
 /*! \fn hbi_status_t HBI_read(hbi_handle_t handle, reg_addr_t reg, 
- *                      user_buffer_t *pData, 
+ *                      user_buffer_t *pOutput, 
  *                     size_t length)
  *
  * \brief Reads the data from device memory starting from register address up to 
@@ -344,11 +369,11 @@ hbi_status_t HBI_reset(hbi_handle_t handle, hbi_rst_mode_t mode);
  *
  * \param [in] handle  - Device handle as returned by HBI_open()
  * \param [in] reg     - Device register address to read from
- * \param [in] pData   - Pointer to user buffer to read data into
+ * \param [in] pOutput   - Pointer to user buffer to read data into
  * \param [in] length  - length of the data to be read in bytes. should be 
                          passed based on 
                          number_of_elements_to_be_read*sizeof(user_buffer_t)
- * \param [out] pData - updated by driver on success
+ * \param [out] pOutput - updated by driver on success
  *
  * \retval HBI_STATUS_SUCCESS
  * \retval HBI_STATUS_BAD_HANDLE
@@ -364,7 +389,7 @@ hbi_status_t HBI_read(hbi_handle_t handle,
 
 /*! \fn hbi_status_t HBI_write(hbi_handle_t handle, 
                      reg_addr_t reg, 
-                     user_buffer_t *pData, 
+                     user_buffer_t *pInput, 
                      size_t length)
  *
  * \brief Writes the data from user buffer to device memory starting from register  
@@ -379,7 +404,7 @@ hbi_status_t HBI_read(hbi_handle_t handle,
  *
  * \param [in] handle  - Device handle as returned by HBI_open()
  * \param [in] reg     - Device register address to write to
- * \param [in] pData   - Pointer to user buffer to read data from
+ * \param [in] pInput   - Pointer to user buffer to read data from
  * \param [in] length  - length of the data to be written in bytes. should be calculated
  *                       based on sizeof(user_buffer_t)*number_of_elements_to_fill in 
  *                       buffer. lets say, user allocate a user_buffer_t reg[2] and what

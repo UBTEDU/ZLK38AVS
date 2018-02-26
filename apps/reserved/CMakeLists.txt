@@ -8,7 +8,10 @@ add_executable(SampleApp
     UIManager.cpp
     KeywordObserver.cpp
     ConnectionObserver.cpp
-    SampleApplication.cpp)
+    SampleApplication.cpp
+    I2cLib.cpp
+    LedDriver.cpp
+    Zle38Avs.cpp)
 
 target_include_directories(SampleApp PUBLIC 
     "${SampleApp_SOURCE_DIR}/include"

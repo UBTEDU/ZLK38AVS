@@ -8,14 +8,12 @@ ccflags-y += -D$(BUILD_TYPE)
 ccflags-y += -zmuldefs
 ccflags-y += -I$(LOCAL_PWD)/inc
 ccflags-y += -I$(ROOTDIR)/drivers/hbi/inc
+ccflags-y += -I$($(ROOTDIR))/platform/$(PLATFORM)/images
 
-#ldflags-y += -L$(INSTALL_LIB_PATH)
-#ldflags-y += -lssl
-#ldflags-y += -lhbi
-# following needs a better way of doing this 
+
 LIB_PATH := ../../../libs
 obj-m := hbi.o
-hbi-objs := $(LIB_PATH)/ssl.o $(LIB_PATH)/hbi.o hbi_k.o 
+hbi-objs := $(LIB_PATH)/ssl_port.o $(LIB_PATH)/hbi.o hbi_k.o
 
 
 all: help

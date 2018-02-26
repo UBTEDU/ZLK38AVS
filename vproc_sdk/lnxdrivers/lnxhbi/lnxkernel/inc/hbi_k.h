@@ -23,8 +23,11 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-
+#include "hbi.h"
 #define HBI_LNX_DRV_MAGIC 'q'
+
+#define HBI_DEV_NAME "hbi"
+
 
 typedef struct hbi_lnx_drv_rw_arg
 {
@@ -128,7 +131,10 @@ typedef hbi_lnx_drv_status_arg_t hbi_lnx_ldfw_done_arg_t;
 /* ioctl to erase complete firmware image from flash. */
 #define HBI_FLASH_ERASE_WHOLE      _IOWR(HBI_LNX_DRV_MAGIC,13,hbi_lnx_flash_erase_fwcfg_arg_t)
 
+#define HBI_UPDATE                 _IOWR(HBI_LNX_DRV_MAGIC,14,hbi_dev_info_t)
 
-
+/* ioctl called when loading config from host.*/
+#define HBI_LOAD_CFG     _IOWR(HBI_LNX_DRV_MAGIC,15,hbi_lnx_send_data_arg_t)
+#define HBI_FLASH_SAVE_CFGREC  _IOWR(HBI_LNX_DRV_MAGIC,16,hbi_lnx_flash_save_fwrcfg_arg_t) 
 
 
