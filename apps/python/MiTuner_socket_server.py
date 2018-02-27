@@ -1,4 +1,10 @@
 #!/usr/bin/env python
+
+# MiTuner_socket_server.py  --  Python 2.7 socket server to be used with MiTuner Bridge
+
+# Copyright 2018 Microsemi Inc. All rights reserved.
+#Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+
 from os.path import dirname, realpath, isfile
 from itertools import izip
 import argparse

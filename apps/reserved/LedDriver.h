@@ -1,3 +1,10 @@
+/*
+* LedDriver.h  --  IS31FL3731 Wrapper Header
+*
+* Copyright 2018 Microsemi Inc. All rights reserved.
+* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+*/
+
 #ifndef LedDriver_H
 #define LedDriver_H
 

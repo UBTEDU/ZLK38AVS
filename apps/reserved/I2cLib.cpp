@@ -1,6 +1,9 @@
-/*************************************************/
-/* I2C Wrapper based on the Linux I2C_RDWR IOCTL */
-/*************************************************/
+/*
+* I2cLib.cpp  --  I2C Wrapper based on the Linux I2C_RDWR IOCTL Implementation
+*
+* Copyright 2018 Microsemi Inc. All rights reserved.
+* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+*/
 
 #include "SampleApp/I2cLib.h"
 

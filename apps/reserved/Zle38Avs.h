@@ -1,3 +1,10 @@
+/*
+* Zle38Avs.h  --  ZLE38AVS board Header
+*
+* Copyright 2018 Microsemi Inc. All rights reserved.
+* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+*/
+
 #ifndef ZLE38AVS_H
 #define ZLE38AVS_H
 

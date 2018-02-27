@@ -1,6 +1,9 @@
-/**********************/
-/* IS31FL3731 Wrapper */
-/**********************/
+/*
+* LedDriver.cpp  --  IS31FL3731 Wrapper Implementation
+*
+* Copyright 2018 Microsemi Inc. All rights reserved.
+* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+*/
 
 #include "SampleApp/LedDriver.h"
 

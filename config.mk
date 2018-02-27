@@ -28,7 +28,6 @@ HOST_MODULES_FILE_PATH =/etc/modules
 HOST_BOOTCFG_FILE_PATH =/boot/config.txt
 HOST_MODULES_FILE_DIR =/lib/modules
 HOST_USER_APPS_START_CFG_FILE_PATH =/etc/rc.local
-HOST_USER_PROF_START_CFG_FILE_PATH :=/home/$(platformUser)/.profile
 HOST_USER_HOME_DIR :=/home/$(platformUser)
 MSCC_LOCAL_APPS_PATH =$(ROOTDIR)/../apps
 HOST_SAMBA_CFG_PATH =/etc/samba/smb.conf
@@ -71,17 +70,16 @@ pi_kheaders :
 	fi
 
 startupcfg:
-	@if [ ! -f $(HOST_USER_HOME_DIR)/.profile.backup ]; then \
-	    sudo cp $(HOST_USER_PROF_START_CFG_FILE_PATH) $(HOST_USER_HOME_DIR)/.profile.backup ; \
-	    echo "if ! lsmod | grep -q hbi ; then" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
-	    echo "    sudo insmod $(INSTALL_MSCC_MOD_DIR)/$(MSCC_HBI_MOD).ko" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
-	    echo "    sudo insmod $(INSTALL_MSCC_MOD_DIR)/$(MSCC_SND_COD_MOD).ko" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
-	    echo "    sudo insmod $(INSTALL_MSCC_MOD_DIR)/$(MSCC_SND_MAC_MOD).ko" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
-	    echo "fi" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
-	    echo "sudo chown -R $(platformUser):$(platformGroup) /dev/$(MSCC_HBI_MOD)*" | sudo tee -a $(HOST_USER_PROF_START_CFG_FILE_PATH); \
-	fi
 	@if [ ! -f $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ]; then \
-	    sudo cp $(HOST_USER_APPS_START_CFG_FILE_PATH) $(HOST_USER_APPS_START_CFG_FILE_PATH).backup ; \
+	    sudo cp $(HOST_USER_APPS_START_CFG_FILE_PATH) $(HOST_USER_APPS_START_CFG_FILE_PATH).backup; \
+	    sudo sed -i "s/^exit 0//g" $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "if ! lsmod | grep -q hbi ; then" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "    sudo insmod $(INSTALL_MSCC_MOD_DIR)/$(MSCC_HBI_MOD).ko" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "    sudo insmod $(INSTALL_MSCC_MOD_DIR)/$(MSCC_SND_COD_MOD).ko" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "    sudo insmod $(INSTALL_MSCC_MOD_DIR)/$(MSCC_SND_MAC_MOD).ko" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "fi" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "sudo chown -R $(platformUser):$(platformGroup) /dev/$(MSCC_HBI_MOD)*" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH); \
+	    echo "exit 0" | sudo tee -a $(HOST_USER_APPS_START_CFG_FILE_PATH); \
 	fi
 	@ ( \
 	if grep -e "$(MSCC_APPS_FWLD) [0-2]" $(HOST_USER_APPS_START_CFG_FILE_PATH); then \

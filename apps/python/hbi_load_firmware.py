@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+# hbi_load_firmware.py  --  Python 2.7 script to manage Timberwolf firmwares and configurations
+
+# Copyright 2018 Microsemi Inc. All rights reserved.
+#Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+
 # Functions designed for programmatic interface:
 # IsFirmwareRunning(handle)
 #     Returns 0x8000 (essentially True) if the firmware is running, 0 otherwise

@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+# tw_firmware_converter.py  --  Python 2.7 script to convert S3 and CR2 files to HBI files
+
+# Copyright 2018 Microsemi Inc. All rights reserved.
+#Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+
 # Functions designed for programmatic interface:
 # fw_bin = GetFirmwareBinFile(in_path, fw_opn, block_size = 16)
 #     in_path: input path of the S3

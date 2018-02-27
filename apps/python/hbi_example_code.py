@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+# hbi_example_code.py  --  Example code on how to use the Timberwolf Device Driver from Python 2.7
+
+# Copyright 2018 Microsemi Inc. All rights reserved.
+#Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+
 from os.path import dirname, realpath, isfile
 import sys
 from tw_firmware_converter import GetFirmwareBinFile

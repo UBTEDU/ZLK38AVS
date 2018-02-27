@@ -1,6 +1,9 @@
-/*************************************************/
-/* I2C Wrapper based on the Linux I2C_RDWR IOCTL */
-/*************************************************/
+/*
+* Zle38Avs.cpp  --  ZLE38AVS board Implementation
+*
+* Copyright 2018 Microsemi Inc. All rights reserved.
+* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+*/
 
 #include "SampleApp/Zle38Avs.h"
 
