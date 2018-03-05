@@ -231,8 +231,10 @@ def LoadFirmware(handle, firmware_buf):
         if (status != HBI_STATUS_SUCCESS):
             raise ValueError("Error - LoadFirmware(): Firmware loading issue (%d)" % status)
 
-    status = HBI_set_command(handle, HBI_CMD_LOAD_FWR_COMPLETE, None)
-    if (status != HBI_STATUS_SUCCESS):
+    HBI_write(handle, 0x032, (0x00, 0x0D))
+    HBI_write(handle, 0x006, (0x00, 0x01))
+    status = FormatNumber(HBI_read(handle, 0x034, 2)) & 0x000F
+    if (status != 0):
         raise ValueError("Error - LoadFirmware(): Firmware final loading issue (%d)" % status)
 
     if not programmatic:
