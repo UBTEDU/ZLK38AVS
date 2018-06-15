@@ -132,7 +132,8 @@ typedef uint16_t reg_addr_t;
  #define HBI_CONFIG_WAKE_SHIFT       7
  #define HBI_CONFIG_WAKE             (1<< HBI_CONFIG_WAKE_SHIFT)
  
- 
+#define ZL380xx_POWER_CFG_REG                        0x0206 
+#define ZL380xx_POWER_I2C_SHIFT                      (1<<13)
 
 /* I2S Port Config Regs */
 #define ZL380xx_TDMA_CFG_REG                         0x0260

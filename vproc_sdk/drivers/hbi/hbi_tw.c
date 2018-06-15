@@ -459,13 +459,18 @@ static inline hbi_status_t tw_wr_transport_cmd(struct vproc_dev *pDev,
     size_t               num_bytes_write;
 
     /* command word is always sent in Big Endian Byte Order */
+#if 0
     #if HOST_ENDIAN_LITTLE
     cmdword = (((cmdword & 0xFF) << 8) | (cmdword >>8));
     #endif
+
+    
+#endif
+    	
     num_bytes_write= sizeof(cmdword);    
-
+    
     VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,"Writing cmdword 0x%x\n",cmdword);
-
+    cmdword = HBI_VAL(pDev,cmdword);
     HBI_LOCK(pDev->port_lock,SSL_WAIT_FOREVER);
     ssl_status = SSL_port_write(pDev->port_handle,(void *)&cmdword,
                                  &num_bytes_write);
@@ -614,7 +619,6 @@ static hbi_status_t tw_save_cfg_to_flash(struct vproc_dev *pDev,void *pCmdArgs)
 static hbi_status_t tw_sleep(struct vproc_dev *pDev)
 {
    hbi_status_t           status = HBI_STATUS_SUCCESS;
-   ZL380xx_HMI_RESPONSE   hmi_response;
    uint16_t               cmd;
 
    /* check whether there's any ongoing command */
@@ -634,15 +638,6 @@ static hbi_status_t tw_sleep(struct vproc_dev *pDev)
                               (user_buffer_t *)&cmd,sizeof(cmd));
    CHK_STATUS(status);
 
-   hmi_response = tw_cmdresult_check(pDev);
-   hmi_response = HBI_VAL(pDev,hmi_response);
-   if(hmi_response != HMI_RESP_SUCCESS)
-   {
-      VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,  
-                     "Command failed with response 0x%x\n",
-                     hmi_response);
-      return HBI_STATUS_COMMAND_ERR;
-   }
    return status;
 }
 
@@ -1175,7 +1170,12 @@ hbi_status_t internal_hbi_set_attrib(struct vproc_dev *pDev,
          }
          else
          {
-            status = tw_wr_transport_cmd(pDev,(HBI_CONFIG_IF_CMD|HBI_CONFIG_WAKE));
+            status = tw_wr_transport_cmd(pDev,(HBI_CONFIG_IF_CMD | HBI_CONFIG_WAKE));
+			VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"wake status %d\n", status);
+			SSL_delay(10);
+            status = tw_wr_transport_cmd(pDev,(HBI_CONFIG_IF_CMD));
+			VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"wake0 status %d\n", status);
+			
 #ifdef VPROC_DEV_INT_MODE_OD
             if(status == HBI_STATUS_SUCCESS)
             {

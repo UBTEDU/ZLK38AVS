@@ -12,15 +12,29 @@ export INSTALL_MSCC_OVERLAYS_DIR =/boot/overlays
 export INSTALL_MSCC_APPS_PATH =/usr/local/bin/
 export HBI_MOD_LOCAL_PATH =$(ROOTDIR)/lnxdrivers/lnxhbi/lnxkernel
 export MSCC_LOCAL_LIB_PATH =$(ROOTDIR)/libs
+#-------------------------------------------------
+# KSRC_TARBALL_NAME specifies the desired kernel source to download
+# the raspberry pi kernel on the git repository are named as follows
+# rpi-x.z.y where x is the major number, z is the minor number
+# y specifies that it is a patched version of the x.z kernel.org version
+# example for kernel 4.9.y x=4 and z=9  , so the kernel name is rpi-4.9.y
+#-------------------------------------------------
+KSRC_TARBALL_NAME =rpi-4.11.y
+KSRC_TARBALL_PATH :=https://github.com/raspberrypi/linux/tarball/$(KSRC_TARBALL_NAME)
+export KSRC_LINUX_PATH :=~/linux
+KSRC_GIT_PATH = https://github.com/raspberrypi/linux.git
+KERNEL=kernel7
+HOST_KERNEL_IMAGE_PATH :=/boot/$(KERNEL).img
 
 export platformUser :=`id -un`
 export platformGroup :=`id -gn`
+
 
 AMAZON_AVS_ONLINE_REPOSITORY =https://github.com/alexa/avs-device-sdk
 SENSORY_ALEXA_ONLINE_REPOSITORY =https://github.com/Sensory/alexa-rpi
 AMAZON_AVS_LOCAL_DIR ?=$(ROOTDIR)/../amazon_avs_cpp
 AMAZON_AVS_JSON_CONFIG =$(AMAZON_AVS_LOCAL_DIR)/sdk-build/Integration/AlexaClientSDKConfig.json
-AMAZON_AVS_SDK_REL=v1.3.tar.gz
+AMAZON_AVS_SDK_REL=v1.7.1.tar.gz
 
 HOST_PI_IMAGE_VER :=`cat /etc/os-release`
 HOST_KHEADERS_DIR =/lib/modules/`uname -r`/build
@@ -31,7 +45,7 @@ HOST_USER_APPS_START_CFG_FILE_PATH =/etc/rc.local
 HOST_USER_HOME_DIR :=/home/$(platformUser)
 MSCC_LOCAL_APPS_PATH =$(ROOTDIR)/../apps
 HOST_SAMBA_CFG_PATH =/etc/samba/smb.conf
-HOST_SAMBA_SHARE_PATH =$(HOST_USER_HOME_DIR)/shares
+HOST_SAMBA_SHARE_PATH =$(HOST_USER_HOME_DIR)/mscc_shares
 
 MSCC_SND_COD_MOD =snd-soc-zl380xx
 MSCC_SND_MAC_MOD =snd-soc-microsemi-dac
@@ -43,27 +57,89 @@ MSCC_DAC_OVERLAY_DTB =microsemi-dac-overlay
 MSCC_SPIMULTI_DTB =microsemi-spi-multi-tw-overlay
 MSCC_SPI_DTB =microsemi-spi-overlay
 
-#TW configuration option for MICs (0: 1 mic, 1: 2 mics, 2: 3 mics)
+# Sensory search order (for SNSR files with all the SO embedded)
+SENSORY_SEARCH_ORDER =19
+
+# TW configuration option for MICs (0: 1 mic, 1: 2 mics, 2: 3 mics)
 MSCC_TW_CONFIG_SELECT_IDX =2
 
 #-------DO NOT MAKE CHANGE BELOW this line ---------------------------
 MSCC_TW_CONFIG_SELECT =$(MSCC_APPS_FWLD) $(MSCC_TW_CONFIG_SELECT_IDX)
 
 # if the raspberrypi kernel headers needed to compile the sdk do not exist fetch them
-.PHONY: pi_kheaders avs_git alexa_install
+.PHONY: pi_kheaders avs_git alexa_install pi_ksrc ksrc_msg_st ksrc_msg_end pi_kheaders_check pi_vercheck pi_kheaders_install
 
-pi_kheaders :
-	@if cat /etc/os-release | grep -q 'stretch'; then \
+ksrc_msg_st:
+	@echo "--*********************************************************************************--"
+	@echo "--*********************************************************************************--"
+	@echo "-- Downloading and installing The kernel $(KSRC_TARBALL_NAME)                      --"
+	@echo "-- Be aware that this process can take as much as 3 hours                          --"
+	@echo "-- Once completed the platform will be configured to boot with the new kernel      --"
+	@echo "--*********************************************************************************--"
+	@echo "--*********************************************************************************--"
+
+ksrc_msg_end:
+	@echo "--*********************************************************************************--"
+	@echo "--*********************************************************************************--"
+	@echo "-- Kernel $(KSRC_TARBALL_NAME) installation completed successfully                 --"
+	@echo "-- Please, reboot the platform for the change to take effect                               --"
+	@echo "--                                                                                 --"
+	@echo "--*********************************************************************************--"
+	@echo "--*********************************************************************************--"
+
+
+pi_ksrc:
+	cd ~/
+	@if [ ! -d $(KSRC_LINUX_PATH) ]; then \
+	    wget $(KSRC_TARBALL_PATH); \
+	    mkdir  $(KSRC_LINUX_PATH); \
+	    sudo chmod 777 $(KSRC_LINUX_PATH); tar -xzvf $(KSRC_TARBALL_NAME) -C $(KSRC_LINUX_PATH) --strip-components 1; \
+	fi
+	sudo apt-get update
+	sudo apt-get install bc
+	sudo apt-get install -y xterm
+	make -C $(KSRC_LINUX_PATH) mrproper	
+	make -C $(KSRC_LINUX_PATH) bcm2709_defconfig
+	make -j4 -C $(KSRC_LINUX_PATH) zImage modules dtbs
+	sudo make -C $(KSRC_LINUX_PATH) modules_install
+	sudo cp $(KSRC_LINUX_PATH)/arch/arm/boot/dts/*.dtb /boot
+	sudo cp $(KSRC_LINUX_PATH)/arch/arm/boot/dts/overlays/*.dtb* $(INSTALL_MSCC_OVERLAYS_DIR)
+	sudo cp $(KSRC_LINUX_PATH)/arch/arm/boot/dts/overlays/README $(INSTALL_MSCC_OVERLAYS_DIR)
+	sudo cp $(KSRC_LINUX_PATH)/arch/arm/boot/zImage $(HOST_KERNEL_IMAGE_PATH)
+
+pi_kheaders : pi_vercheck pi_kheaders_install pi_kheaders_check
+
+pi_kheaders_install : 
+	@if [ ! -d $(HOST_KHEADERS_DIR) ]; then \
 	    echo "kernel headers do not exist, fetching and installing kernel headers..."; \
-	    sudo apt-get update; \
 	    sudo apt-get install raspberrypi-kernel-headers; \
+	    echo "Kernel Headers installed ...."; \
+	else \
+	    echo " kernel headers already installed, 0 upgraded, 0 newly installed..."; \
+	fi
+
+
+pi_kheaders_check :
+	@if [ ! -d $(HOST_KHEADERS_DIR) ]; then \
+	    echo "The kernel headers were not installer properly, due to incompatibility with running kernel!!"; \
+	    echo "to replace the running kernel with compatible kernel $(KSRC_TARBALL_NAME) version do a:"; \
+	    echo "make ksrc_update"; \
+	    false; \
+	else \
+	    echo "kernel headers pass compatibility check ...."; \
+	fi
+ 	
+	
+pi_vercheck :
+	@if cat /etc/os-release | grep -q 'stretch'; then \
+	    sudo apt-get update; \
 	    sudo apt-get install -y xterm; \
 	else \
 	    echo; \
 	    echo; \
 	    echo "--****************************************************************************--"; \
 	    echo "--                                 ABORTING                                   --"; \
-	    echo "--                   Only Raspbian 9 \"Stretch\" is supported                   --"; \
+	    echo "--                   Only Raspbian 9 \"Stretch\" is supported                 --"; \
 	    echo "--****************************************************************************--"; \
 	    echo; \
 	    false; \
@@ -212,7 +288,7 @@ enable_autostart:
 	    echo "cd $(ROOTDIR)/.." >> $(ROOTDIR)/../\.start.sh; \
 	    echo "make alexa_xterm" >> $(ROOTDIR)/../\.start.sh; \
 	    echo "sleep 8" >> $(ROOTDIR)/../\.start.sh; \
-	    echo "aplay $(AMAZON_AVS_LOCAL_DIR)/application-necessities/sound-files/med_system_alerts_melodic_01_short._TTH_.wav" >> $(ROOTDIR)/../\.start.sh; \
+	    echo "aplay $(AMAZON_AVS_LOCAL_DIR)/application-necessities/med_system_alerts_melodic_01_short._TTH_.wav" >> $(ROOTDIR)/../\.start.sh; \
 	    echo "sleep 2" >> $(ROOTDIR)/../.start.sh; \
 	fi
 	@sudo chmod +x $(ROOTDIR)/../\.start.sh
@@ -238,20 +314,19 @@ alexa_install:
 	@echo "--*********************************************************************************--"
 
 # Install all the required packages
-# Get the specified tag of the  Alexa C++ sample app and add code to turn on an LED when Alexa is detected
+# Get the specified tag of the  Alexa C++ sample app and add the custom code via a patch (LED, WW feedback, Dual Stream, ESP)
 	@if [ ! -d  $(AMAZON_AVS_LOCAL_DIR) ]; then \
 	    sudo apt-get update; \
-	    sudo apt-get -y install git gcc cmake build-essential libsqlite3-dev libcurl4-openssl-dev libfaad-dev libsoup2.4-dev libgcrypt20-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-good libasound2-dev doxygen jq moreutils; \
-	    sudo pip install commentjson; \
+	    sudo apt-get -y install git gcc cmake build-essential libsqlite3-dev libcurl4-openssl-dev libfaad-dev libsoup2.4-dev libgcrypt20-dev libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-good libasound2-dev sox doxygen jq moreutils; \
+	    sudo pip install flask commentjson; \
 	    mkdir $(AMAZON_AVS_LOCAL_DIR) $(AMAZON_AVS_LOCAL_DIR)/sdk-source $(AMAZON_AVS_LOCAL_DIR)/third-party; \
 	    cd $(AMAZON_AVS_LOCAL_DIR)/sdk-source; \
 	    mkdir avs-device-sdk; \
 	    wget https://github.com/alexa/avs-device-sdk/archive/$(AMAZON_AVS_SDK_REL); \
 	    tar -xf $(AMAZON_AVS_SDK_REL) -C avs-device-sdk --strip-components 1; \
 	    rm $(AMAZON_AVS_SDK_REL); \
-	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/CMakeLists.txt ./avs-device-sdk/SampleApp/src/; \
-	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/*.cpp ./avs-device-sdk/SampleApp/src/; \
-	    cp -f $(MSCC_LOCAL_APPS_PATH)/reserved/*.h ./avs-device-sdk/SampleApp/include/SampleApp/; \
+	    cd avs-device-sdk; \
+	    patch -p1 < $(MSCC_LOCAL_APPS_PATH)/avs_kit.patch; \
 	fi
 
 # Install Portaudio
@@ -280,13 +355,14 @@ alexa_install:
 	    echo "--****************************************************************************--"; \
 	    echo; \
 	    ./license.sh; \
+	    sed -i "s/SNSR_OPERATING_POINT, [0-9]\+/SNSR_OPERATING_POINT, $(SENSORY_SEARCH_ORDER)/g" $(AMAZON_AVS_LOCAL_DIR)/sdk-source/avs-device-sdk/KWD/Sensory/src/SensoryKeywordDetector.cpp; \
 	fi
 
 # Build the Alexa sample app
 	@if [ ! -d  $(AMAZON_AVS_LOCAL_DIR)/sdk-build ]; then \
 	    mkdir $(AMAZON_AVS_LOCAL_DIR)/sdk-build; \
 	    cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build; \
-	    cmake $(AMAZON_AVS_LOCAL_DIR)/sdk-source/avs-device-sdk -DSENSORY_KEY_WORD_DETECTOR=ON -DSENSORY_KEY_WORD_DETECTOR_LIB_PATH=$(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/lib/libsnsr.a -DSENSORY_KEY_WORD_DETECTOR_INCLUDE_DIR=$(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/include -DGSTREAMER_MEDIA_PLAYER=ON -DPORTAUDIO=ON -DPORTAUDIO_LIB_PATH=$(AMAZON_AVS_LOCAL_DIR)/third-party/portaudio/lib/.libs/libportaudio.a -DPORTAUDIO_INCLUDE_DIR=$(AMAZON_AVS_LOCAL_DIR)/third-party/portaudio/include; \
+	    cmake $(AMAZON_AVS_LOCAL_DIR)/sdk-source/avs-device-sdk -DSENSORY_KEY_WORD_DETECTOR=ON -DSENSORY_KEY_WORD_DETECTOR_LIB_PATH=$(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/lib/libsnsr.a -DSENSORY_KEY_WORD_DETECTOR_INCLUDE_DIR=$(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/include -DGSTREAMER_MEDIA_PLAYER=ON -DPORTAUDIO=ON -DPORTAUDIO_LIB_PATH=$(AMAZON_AVS_LOCAL_DIR)/third-party/portaudio/lib/.libs/libportaudio.a -DPORTAUDIO_INCLUDE_DIR=$(AMAZON_AVS_LOCAL_DIR)/third-party/portaudio/include -DCMAKE_BUILD_TYPE=DEBUG; \
 	    make SampleApp -j2; \
 	fi
 
@@ -302,53 +378,40 @@ alexa_install:
 	@echo
 	@echo "--****************************************************************************--"
 	@echo "--     Enter the device's tokens found on your Amazon developper account      --"
-	@echo "--                https://developer.amazon.com/avs/home.html                  --"
+	@echo "--           https://developer.amazon.com/avs/home.html#/avs/home             --"
 	@echo "--****************************************************************************--"
 	@echo
 
 	@read -p "Product ID   : " productID; \
 	read -p "Client ID    : " clientID; \
-	read -p "Client secret: " clientSecret; \
+	delegateDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/delegate.db; \
+	miscDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/misc.db; \
 	alertsDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/alerts.db; \
 	settingsDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/settings.db; \
+	bluetoothDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/bluetooth.db; \
 	certifDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/certifiedSender.db; \
+	notifDB=$(AMAZON_AVS_LOCAL_DIR)/application-necessities/notifications.db; \
 	cat $(AMAZON_AVS_JSON_CONFIG)|grep -v '\s*//'|sponge $(AMAZON_AVS_JSON_CONFIG); \
-	jq '.authDelegate.clientSecret="'$$clientSecret'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
-	jq '.authDelegate.deviceSerialNumber="1"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
-	jq '.authDelegate.clientId="'$$clientID'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
-	jq '.authDelegate.productId="'$$productID'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
-	jq '.authDelegate.refreshToken="{SDK_CONFIG_REFRESH_TOKEN}"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.cblAuthDelegate.databaseFilePath="'$$delegateDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.deviceInfo.deviceSerialNumber="1"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.deviceInfo.clientId="'$$clientID'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.deviceInfo.productId="'$$productID'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.miscDatabase.databaseFilePath="'$$miscDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.alertsCapabilityAgent.databaseFilePath="'$$alertsDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.settings.databaseFilePath="'$$settingsDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.settings.defaultAVSClientSettings.locale="en-US"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.bluetooth.databaseFilePath="'$$bluetoothDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 	jq '.certifiedSender.databaseFilePath="'$$certifDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.notifications.databaseFilePath="'$$notifDB'"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.gstreamerMediaPlayer.outputConversion.rate=48000' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.gstreamerMediaPlayer.outputConversion.format="S16LE"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.gstreamerMediaPlayer.outputConversion.channels=2' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
+	jq '.gstreamerMediaPlayer.audioSink="alsasink"' $(AMAZON_AVS_JSON_CONFIG)|sponge $(AMAZON_AVS_JSON_CONFIG); \
 
-# Update the refresh token
-	@echo
-	@echo
-	@echo "--****************************************************************************--"
-	@echo "--     Open Chromium (on the Pi) and navigate to \"http://localhost:3000\"      --"
-	@echo "--       Expected: \"refresh request failed with the response code 400\"        --"
-	@echo "--****************************************************************************--"
-
-	@cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build; \
-	python AuthServer/AuthServer.py
-
-	@echo
-	@echo
-	@echo "--****************************************************************************--"
-	@echo "--                 Alexa sample app autoboot (headless mode)                  --"
-	@echo "--****************************************************************************--"
-	@echo
-
-	@ ( \
-	    read -p "Do you want the Alexa sample app to autoboot [y/n]?" answer; \
-	    if [ $$answer == "y" ]; then \
-	        $(MAKE) enable_autostart; \
-	    else \
-	        $(MAKE) disable_autostart; \
-	    fi \
-	)
+# Erase the certification database to prompt a new authentication
+	@if [ -f $(AMAZON_AVS_LOCAL_DIR)/application-necessities/delegate.db ]; then \
+	    rm -f $(AMAZON_AVS_LOCAL_DIR)/application-necessities/delegate.db; \
+	fi
 
 # Update the serial number
 	@$(MAKE) set_serial
@@ -385,19 +448,18 @@ samba:
 	sudo apt-get update
 	sudo apt-get install samba samba-common-bin
 	sudo cp /etc/samba/smb.conf /etc/samba/smb.conf.old
-	sudo smbpasswd -a $(platformUser)
 	@if [ ! -d $(HOST_SAMBA_SHARE_PATH) ]; then \
 	    mkdir $(HOST_SAMBA_SHARE_PATH); \
 	    sudo chown -R root:users $(HOST_SAMBA_SHARE_PATH); \
-	    sudo chmod -R ug=rwx,o=rx $(HOST_SAMBA_SHARE_PATH); \
+	    sudo chmod -R 777 $(HOST_SAMBA_SHARE_PATH); \
 	fi
 	@sudo sed -i "s/server role = standalone server/security = user \n   server role = standalone/" $(HOST_SAMBA_CFG_PATH);
 	@sudo sed -i "s/read only = yes/read only = no/g" $(HOST_SAMBA_CFG_PATH);
 	@echo "[shares]" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
 	@echo "   comment = Public Storage" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
 	@echo "   path = $(HOST_SAMBA_SHARE_PATH)" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
-	@echo "   valid users = users" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
-	@echo "   force group = users" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
+	@echo "   guest ok = yes" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
+	@echo "   browseable = yes" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
 	@echo "   create mask = 0660" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
 	@echo "   directory mask = 0771" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
 	@echo "   read only = no" | sudo tee -a $(HOST_SAMBA_CFG_PATH);
@@ -419,9 +481,10 @@ update_sensory:
 	echo "--             Read and accept Sensory's licence agreement (yes)              --"; \
 	echo "--****************************************************************************--"; \
 	echo; \
-	./license.sh; \
-	rm -rf $(AMAZON_AVS_LOCAL_DIR)/sdk-build
-	$(MAKE) alexa_install
+	./license.sh
+	@sed -i "s/SNSR_OPERATING_POINT, [0-9]\+/SNSR_OPERATING_POINT, $(SENSORY_SEARCH_ORDER)/g" $(AMAZON_AVS_LOCAL_DIR)/sdk-source/avs-device-sdk/KWD/Sensory/src/SensoryKeywordDetector.cpp
+	@cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build; \
+	make SampleApp -j2
 
 message:
 	@echo "--*********************************************************************************--"
@@ -436,10 +499,10 @@ message:
 # Start the sample app in a separate terminal
 alexa_xterm:
 	@sudo cp /etc/asound.conf $(HOST_USER_HOME_DIR)/.asoundrc
-	@xterm -hold -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build/SampleApp/src/; TZ=UTC ./SampleApp $(AMAZON_AVS_JSON_CONFIG) $(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/models; bash"' &
+	@xterm -hold -e 'bash -c "cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build/SampleApp/src/; ./SampleApp $(AMAZON_AVS_JSON_CONFIG) $(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/models; bash"' &
 
 # Start the sample app in the same terminal
 alexa_exec:
 	@sudo cp /etc/asound.conf $(HOST_USER_HOME_DIR)/.asoundrc
 	@cd $(AMAZON_AVS_LOCAL_DIR)/sdk-build/SampleApp/src/; \
-	TZ=UTC ./SampleApp $(AMAZON_AVS_JSON_CONFIG) $(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/models
+	./SampleApp $(AMAZON_AVS_JSON_CONFIG) $(AMAZON_AVS_LOCAL_DIR)/third-party/alexa-rpi/models

@@ -102,6 +102,7 @@
 /* These typedefs are not defined in hbi.h, but are needed by SWIG */
 typedef uint32_t hbi_handle_t;
 typedef uint16_t reg_addr_t;
+typedef int tw_device_id_t;
 
 /* Everything in here will have a SWIG wrapper implementation */
 %include "../../../vproc_sdk/drivers/hbi/inc/hbi.h"

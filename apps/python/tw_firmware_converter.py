@@ -49,12 +49,12 @@ def ParseFile(path):
     return buf
 
 # ****************************************************************************
-def ParseS3Segment(list, seg_addr, seg_len):
+def ParseS3Segment(buffer_list, seg_addr, seg_len):
 
     found = False
     seg_buffer = []
     seg_counter = 0
-    for line in list:
+    for line in buffer_list:
         if (line[0: 2].lower() != "s3"):
             # Skip non S3 lines
             continue
@@ -73,6 +73,7 @@ def ParseS3Segment(list, seg_addr, seg_len):
             split_line = map(lambda x: int(x, 16), split_line)
 
             # Payload (in between the address and the checksum)
+            split_line = list(split_line)
             payload_byte_list = split_line[5: -1]
 
             # Check the checksum
@@ -89,7 +90,7 @@ def ParseS3Segment(list, seg_addr, seg_len):
                 # Add 0s to fill the gap
                 seg_buffer += [0] * gap
                 if not programmatic:
-                    print "Info - Found a gap of %d bytes at address 0x%08X" % (gap, addr - gap)
+                    print("Info - Found a gap of %d bytes at address 0x%08X" % (gap, addr - gap))
 
             # Append the current payload
             seg_buffer += payload_byte_list
@@ -112,14 +113,14 @@ def DecodeTable(header):
     offset = 0x128
 
     # The S3 starts with the configuration record
-    seg_list.append([0x00080200, header[(0x1F0 - offset) / 2]])
+    seg_list.append([0x00080200, header[(0x1F0 - offset) // 2]])
 
     # Add all the firmware segments
-    num_seg = header[(0x13E - offset) / 2]
-    for i in xrange(num_seg):
-        seg_size = (header[((0x140 + i * 8) - offset) / 2] << 16) + header[((0x142 + i * 8) - offset) / 2]
+    num_seg = header[(0x13E - offset) // 2]
+    for i in range(num_seg):
+        seg_size = (header[((0x140 + i * 8) - offset) // 2] << 16) + header[((0x142 + i * 8) - offset) // 2]
         seg_size &= 0x00FFFFFF
-        seg_addr = (header[((0x144 + i * 8) - offset) / 2] << 16) + header[((0x146 + i * 8) - offset) / 2]
+        seg_addr = (header[((0x144 + i * 8) - offset) // 2] << 16) + header[((0x146 + i * 8) - offset) // 2]
         seg_list.append([seg_addr, seg_size])
 
     return seg_list
@@ -158,13 +159,14 @@ def FormatSegmentToHbi(segment_list, start_address, block_size_words, isConfig =
                 else:
                     # Page 255 indirect address update
                     block_list_bytes = [0x86, 0x81]
-                    block_list_bytes.append((addr >> 24) & 0xFF)
-                    block_list_bytes.append((addr >> 16) & 0xFF)
-                    block_list_bytes.append((addr >> 8) & 0xFF)
-                    block_list_bytes.append(0x00)
+
+                block_list_bytes.append((addr >> 24) & 0xFF)
+                block_list_bytes.append((addr >> 16) & 0xFF)
+                block_list_bytes.append((addr >> 8) & 0xFF)
+                block_list_bytes.append(0x00)
 
             # Paged offset access
-            offset_words = (addr & 0xFF) / 2
+            offset_words = (addr & 0xFF) // 2
             block_list_bytes.append(offset_words)
             rem_page_bytes -= offset_words * 2
 
@@ -178,7 +180,7 @@ def FormatSegmentToHbi(segment_list, start_address, block_size_words, isConfig =
                 pad_bytes = 0
 
             # Append the length with the Write (0x80)
-            block_list_bytes.append((block_size_bytes / 2 - 1) + 0x80)
+            block_list_bytes.append((block_size_bytes // 2 - 1) + 0x80)
 
             # Append the data
             block_list_bytes += segment_list[seg_index: seg_index + block_size_bytes]
@@ -210,7 +212,7 @@ def FormatSegmentToHbi(segment_list, start_address, block_size_words, isConfig =
                 pad_bytes = 0
 
             # Append the length
-            block_list_bytes.append(block_size_bytes / 2 - 1)
+            block_list_bytes.append(block_size_bytes // 2 - 1)
 
             # Append the data
             block_list_bytes += segment_list[seg_index: seg_index + block_size_bytes]
@@ -241,7 +243,7 @@ def FormatSegmentToHbi(segment_list, start_address, block_size_words, isConfig =
 
             # Write the Continue partition
             block_list_bytes = [0xFB]
-            block_list_bytes.append(continue_bytes / 2 - 1)
+            block_list_bytes.append(continue_bytes // 2 - 1)
 
             # Append the data
             block_list_bytes += segment_list[seg_index: seg_index + continue_bytes]
@@ -275,7 +277,7 @@ def FormatSegmentToHbi(segment_list, start_address, block_size_words, isConfig =
                     ctrl_bytes = 8
 
                 # Paged offset access
-                offset_words = (addr & 0xFF) / 2
+                offset_words = (addr & 0xFF) // 2
                 block_list_bytes.append(offset_words)
                 rem_page_bytes -= offset_words * 2
 
@@ -289,7 +291,7 @@ def FormatSegmentToHbi(segment_list, start_address, block_size_words, isConfig =
                     pad_bytes = 0
 
                 # Append the length with the Write (0x80)
-                block_list_bytes.append((block_size_bytes / 2 - 1) + 0x80)
+                block_list_bytes.append((block_size_bytes // 2 - 1) + 0x80)
 
                 # Append the data and NOP (if any)
                 block_list_bytes += segment_list[seg_index: seg_index + block_size_bytes]
@@ -316,13 +318,14 @@ def FormatSegmentToHbi(segment_list, start_address, block_size_words, isConfig =
     return temp_list_bytes
 
 # ****************************************************************************
-def FormatS7ToHbi(list, block_size):
+def FormatS7ToHbi(buffer_list, block_size):
 
     # Parse the S3 file in reverse order as the S7 record is usualy at the end
-    for line in reversed(list):
+    for line in reversed(buffer_list):
         if (line[0: 2].lower() == "s7"):
             split_line = re.findall(r"[0-9a-fA-F]{2}", line[2:])
             split_line = map(lambda x: int(x, 16), split_line)
+            split_line = list(split_line)
 
             # Check the checksum
             checksum = (sum(split_line) + 1) & 0xFF
@@ -416,7 +419,7 @@ def GenerateFwFile(in_file, in_path, out_path, fw_opn, block_size):
             print >> out_file, ("const unsigned char %s[] = {" % filename)
             temp_str = "%s" % map(lambda x: ("0x%02X" % x), out_list_bytes[0: 12])
             print >> out_file, ("     " + temp_str.strip("[]").translate(None, "\'\""))
-            for i in xrange(12, out_list_len, 16):
+            for i in range(12, out_list_len, 16):
                 temp_str = "%s" % map(lambda x: ("0x%02X" % x), out_list_bytes[i: i + 16])
                 print >> out_file, ("    ," + temp_str.strip("[]").translate(None, "\'\""))
             print >> out_file, "};"
@@ -463,7 +466,7 @@ def GenerateConfigFile(in_file, in_path, out_path, block_size):
             # Check previously accumulated data need to be stored
             if (len(data_buffer) > 0):
                 if not programmatic:
-                    print "Info - GenerateConfigFile(): Address discontinuity detected at 0x%03X" % addr
+                    print("Info - GenerateConfigFile(): Address discontinuity detected at 0x%03X" % addr)
                 # Store the previous segment
                 buffer_list[-1][1] = data_buffer
 
@@ -532,7 +535,7 @@ def GenerateConfigFile(in_file, in_path, out_path, block_size):
             print >> out_file, ("const unsigned char %s[] = {" % filename)
             temp_str = "%s" % map(lambda x: ("0x%02X" % x), out_list_bytes[0: 12])
             print >> out_file, ("     " + temp_str.strip("[]").translate(None, "\'\""))
-            for i in xrange(12, out_list_len, 16):
+            for i in range(12, out_list_len, 16):
                 temp_str = "%s" % map(lambda x: ("0x%02X" % x), out_list_bytes[i: i + 16])
                 print >> out_file, ("    ," + temp_str.strip("[]").translate(None, "\'\""))
             print >> out_file, "};"
@@ -605,4 +608,4 @@ ex: %s ZLS38040_configuration.cr2 ZLS38040_configuration.hbi -b 64
             raise ValueError("Error - Main(): unsupported file format (%s)" % file_extension)
 
     except ValueError as err:
-        print err
+        print(err)

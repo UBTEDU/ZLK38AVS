@@ -27,4 +27,5 @@ Developers can use Microsemi's Amazon Alexa development kit to build customer so
 ![Microsemi AVS ecosystem](../../wiki/pictures/Microsemi-audio-processing-applications-infographic.png)
 
 ## Important considerations
-Check the wiki for the [hardware assembly](../../wiki/Hardware_Assembly) and the [software installation](../../wiki/Software_Installation)
+Check the wiki for the [hardware assembly](../../wiki/Hardware_Assembly) and the [software installation](../../wiki/Software_Installation)   
+_Note: The Amazon authentication has changed, make sure to use the proper **Client ID**_

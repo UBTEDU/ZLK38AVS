@@ -34,9 +34,9 @@
 #include "ssl.h"
 #include "hal.h"
 #include "vproc_dbg.h"
-#include "fwr_image_headers.h" 
+#include "fwr_image_headers.h"
 
-#undef HAL_DEBUG 
+#undef HAL_DEBUG
 
 /*Driver probe function - Linux platform only*/
 int vproc_probe(
@@ -54,8 +54,8 @@ int vproc_remove(
 #endif
 
 /* Initialized instance of devices
- * PLATFORM INDEPENDANT - 
- * There should be one entry per device as per the number of devices defined by 
+ * PLATFORM INDEPENDANT -
+ * There should be one entry per device as per the number of devices defined by
  * VPROC_MAX_NUM_DEVS
  * The firmware and config record *.h files must be located in a folder named images under /platform/your_own_platform
  * EXample: for the raspberry platform  /platform/raspberry/images
@@ -94,8 +94,8 @@ static struct i2c_client devClient[VPROC_MAX_NUM_DEVS];
 static struct spi_device devClient[VPROC_MAX_NUM_DEVS];
 #endif
 
-/*IMPORTANT NOTE: 
- * This is for Linux platform only. Not needed for non-Linux platform 
+/*IMPORTANT NOTE:
+ * This is for Linux platform only. Not needed for non-Linux platform
  * This is only required if the Linux platform support device tree driver registration
  * Change string maching of .compatible= accordingly as per your *.dts or *dtsi compatible definition file
  */
@@ -135,17 +135,17 @@ struct spi_driver vproc_driver = {
 };
 
 
-/*vproc_probe() - This function is Linux specific it is automatically 
+/*vproc_probe() - This function is Linux specific it is automatically
  *               called by the Linux kernel driver registration process whenever
  *               a spi_register_driver() or I2C_add_driver is issued
  *               It is not need for non-linux operating system
- *  Args: 
+ *  Args:
  *           pointer to where to the spi or I2C device driver data
  * Return:
  *          0 if success, a negative number if failure
  */
 int vproc_probe(
-#if HBI==I2C 
+#if HBI==I2C
       struct i2c_client *pClient, const struct i2c_device_id *pDeviceId) /*I2C*/
 #else
       struct spi_device *pClient)   /*SPI*/
@@ -155,8 +155,8 @@ int vproc_probe(
     /* Bind device to driver */
     pClient->dev.driver = &(vproc_driver.driver);
 #ifdef SUPPORT_LINUX_DEVICE_TREE_OF_MATCHING
-    VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,"slave HBI device %d found at"  
-#if HBI==I2C    
+    VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,"slave HBI device %d found at"
+#if HBI==I2C
     "adapter::addr = %s::0x%02x\n", dev_id, pClient->adapter->name, pClient->addr);   /*I2C*/
 #else
     "bus::cs = %d::0x%02x\n", dev_id, pClient->master->bus_num, pClient->chip_select); /*SPI*/
@@ -179,7 +179,7 @@ int vproc_probe(
 }
 
 int vproc_remove(
-#if HBI==I2C  
+#if HBI==I2C
      struct i2c_client *pClient)
 #else
      struct spi_device *pClient)
@@ -190,8 +190,8 @@ int vproc_remove(
 
 /*hal_init() - This function is the first function call by the driver upon install
  *             any specific board/platform setup must be done by this funtion
- *  Args: 
- *         none 
+ *  Args:
+ *         none
  * Return:
  *          0 if success, a negative number if failure
  */
@@ -202,7 +202,7 @@ int hal_init(void)
     {
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"sdk_register_board_devices_info() failed error = %d\n", status);
     }
-#if HBI==I2C     
+#if HBI==I2C
     status = i2c_add_driver(&vproc_driver);
 #else
     status = spi_register_driver(&vproc_driver);
@@ -217,7 +217,7 @@ int hal_init(void)
 
 int hal_term()
 {
-#if HBI==I2C 
+#if HBI==I2C
     i2c_del_driver(&vproc_driver);
 #else
     spi_unregister_driver(&vproc_driver);
@@ -227,8 +227,8 @@ int hal_term()
 }
 
 
-/*hal_open() - use this function to open one or multiple instances of the driver 
- *  Args: 
+/*hal_open() - use this function to open one or multiple instances of the driver
+ *  Args:
  *         pHandle : device driver handle, basically a refence to how to access the device
  *         pDevCfg : pointer to the device bus number and the address on the bus to open
  * Return:
@@ -239,18 +239,18 @@ int hal_open(void **ppHandle,void *pDevCfg)
     tw_device_id_t deviceId;
 
     ssl_dev_cfg_t *pDev = (ssl_dev_cfg_t *)pDevCfg;
-#if HBI==I2C    
+#if HBI==I2C
     struct i2c_adapter      *pAdap=NULL;
-    struct i2c_client  *pClient = NULL;   
+    struct i2c_client  *pClient = NULL;
 #ifndef SUPPORT_LINUX_DEVICE_TREE_OF_MATCHING
-    struct i2c_board_info   bi; 
-#endif 
-#else     
+    struct i2c_board_info   bi;
+#endif
+#else
     struct spi_master *pAdap = NULL;
     struct spi_device *pClient = NULL;
 #ifndef SUPPORT_LINUX_DEVICE_TREE_OF_MATCHING
-    struct spi_board_info   bi; 
-#endif 
+    struct spi_board_info   bi;
+#endif
 #endif
 
     if ((pDev->deviceId < 0) || (pDev->deviceId >= VPROC_MAX_NUM_DEVS))
@@ -274,8 +274,8 @@ int hal_open(void **ppHandle,void *pDevCfg)
     pClient = &devClient[deviceId];
 #endif
     /* get the controller driver through bus num */
-#if HBI==I2C  
-   
+#if HBI==I2C
+
     pAdap = i2c_get_adapter(pDev->bus_num);
     if(pAdap==NULL)
     {
@@ -289,7 +289,7 @@ int hal_open(void **ppHandle,void *pDevCfg)
     if(pDev->pDevName != NULL)
     {
         strcpy(pClient->name,pDev->pDevName);
-    }   
+    }
 #ifndef SUPPORT_LINUX_DEVICE_TREE_OF_MATCHING
     memset(&bi,0,sizeof(bi));
     if(pDev->pDevName != NULL)
@@ -298,7 +298,7 @@ int hal_open(void **ppHandle,void *pDevCfg)
     }
     bi.addr = pDev->dev_addr;
     pClient = i2c_new_device(pAdap,(struct i2c_board_info const *)&bi);
-#endif     
+#endif
     if(pClient == NULL)
     {
      /* call failed either because address is invalid, valid but occupied
@@ -353,7 +353,7 @@ int hal_open(void **ppHandle,void *pDevCfg)
 
 /*hal_close() - Since multiple instance of the driver can be opened simultaneously
  *              use this function to close a particular instance of the driver
- *  Args: 
+ *  Args:
  *         pHandle : device driver handle, basically a refence to how to access the device
  * Return:
  *         0 if success, a negative number if failure
@@ -372,7 +372,7 @@ int hal_close(void *pHandle)
 
     /*Do not unregister the SPI if using device tree registration*/
 #ifndef SUPPORT_LINUX_DEVICE_TREE_OF_MATCHING
-#if HBI==I2C 
+#if HBI==I2C
     i2c_unregister_device((struct i2c_client *) pHandle);
 #else
     spi_unregister_device((struct spi_device *) pHandle);
@@ -385,7 +385,7 @@ int hal_close(void *pHandle)
 /*hal_port_rw():  this function is used for both read and write accesses
  *  write: send data from the master to the slave device
  *  read:  master receives data from the slave device
- *  Args: 
+ *  Args:
  *         pHandle : device driver handle, basically a refence to how to access the device
  *         pPortAccess: the access type, data to send and the buffer to receive the data
  * Return:
@@ -395,7 +395,7 @@ int hal_port_rw(void *pHandle,void *pPortAccess)
 {
     int                 ret=0;
     ssl_port_access_t   *pPort = (ssl_port_access_t *)pPortAccess;
-#if HBI==I2C 
+#if HBI==I2C
     struct i2c_client *pClient = pHandle;
     struct i2c_msg msg[2];
 #else
@@ -423,7 +423,7 @@ int hal_port_rw(void *pHandle,void *pPortAccess)
             VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"NULL src buffer passed\n");
             return -EINVAL;
         }
-#if HBI==I2C 
+#if HBI==I2C
         msg[msgnum].addr = pClient->addr;
         msg[msgnum].flags = 0;
         msg[msgnum].buf = pPort->pSrc;
@@ -451,11 +451,11 @@ int hal_port_rw(void *pHandle,void *pPortAccess)
             VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"NULL destination buffer passed\n");
             return -EINVAL;
         }
-#if HBI==I2C 
+#if HBI==I2C
         msg[msgnum].addr = pClient->addr;
         msg[msgnum].flags = I2C_M_RD;
         msg[msgnum].buf = pPort->pDst;
-#else        
+#else
         msg[msgnum].rx_buf = pPort->pDst;
 #endif
         msg[msgnum].len = pPort->nread;

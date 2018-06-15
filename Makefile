@@ -32,6 +32,9 @@ host: pi_kheaders vproc_sdk install_sdk soundcfg message
 
 vproc_sdk: $(SDKDIRS)
 
+ksrc_update: ksrc_msg_st pi_ksrc ksrc_msg_end
+
+
 $(SDKDIRS):
 	$(MAKE) -C $@ vproc_sdk
 
@@ -64,9 +67,9 @@ swig:
 	$(MAKE) -C $(ROOTDIR)/../apps/python/wrapper
 
 help:
-	@echo "-----------------------------------------------------------------------------------------------"
-	@echo "| Microsemi AVS Kit software version 2.1.2                                                    |"
-	@echo "-----------------------------------------------------------------------------------------------"
+	@echo "----------------------------------------------------------------------------------------"
+	@echo "| Microsemi AVS Kit software version 2.5.0                                             |"
+	@echo "----------------------------------------------------------------------------------------"
 	@echo "| SHELL="$(SHELL)
 	@echo "| ROOTDIR="$(ROOTDIR)
 	@echo "| SDKDIRS="$(SDKDIRS)
@@ -76,10 +79,17 @@ help:
 	@echo "| USERDIR="$(HOST_USER_HOME_DIR)
 	@echo "| USERPROFILE="$(HOST_USER_PROF_START_CFG_FILE_PATH)
 	@echo "| USER:GROUP="$(platformUser):$(platformGroup)
-	@echo "| To compile the Microsemi Voice Processing SDK: make vproc_sdk or make"
-	@echo "| To compile the SDK, configure the host to bootup with the SDK driver/apps, download/compile Amazon Alexa : make all"
-	@echo "| To compile the SDK, and configure the host to bootup with the SDK driver/apps : make host"
-	@echo "| To undo everything done by the SDK compilation and install (Amazon alexa is not removed): make clean"
-	@echo "| To undo everything done by make all compilation: make cleanall"
-	@echo "-----------------------------------------------------------------------------------------------"
+	@echo "| make start_alexa      : Start the Amazon Alexa sample application"
+	@echo "| make avs_config       : Register or re-register with an Amazon Alexa account"
+	@echo "| make update_sensory   : Renew the Sensory license"
+	@echo "| make enable_autostart : Enable the Autoboot (the Amazon Alexa sample application"
+	@echo "|                         automatically runs at start-up)"
+	@echo "| make disable_autostart: Disable the Autoboot"
+	@echo "| make all              : Make everything (Microsemi driver and Amazon Alexa sample"
+	@echo "|                         application)"
+	@echo "| make cleanall         : Uninstall everything (Microsemi driver and Amazon Alexa sample"
+	@echo "|                         application)"
+	@echo "| make host             : Make the Microsemi driver"
+	@echo "| make clean            : Uninstall the Microsemi driver"
+	@echo "----------------------------------------------------------------------------------------"
 

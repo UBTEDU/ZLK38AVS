@@ -403,7 +403,7 @@ hbi_status_t HBI_set_command(hbi_handle_t handle,hbi_cmd_t cmd,void *pCmdArgs)
 
 hbi_status_t HBI_reset(hbi_handle_t handle, hbi_rst_mode_t mode)
 {
-   if(gDrvInitialised == FALSE)
+   if(!gHbiDrvPriv.drvInitialised)
    {
       return HBI_STATUS_NOT_INIT;
    }
@@ -413,22 +413,55 @@ hbi_status_t HBI_reset(hbi_handle_t handle, hbi_rst_mode_t mode)
 
 hbi_status_t HBI_sleep(hbi_handle_t handle)
 {
-   if(gDrvInitialised == FALSE)
+   hbi_status_t   status;
+   int fd=(int)handle;
+   hbi_lnx_drv_arb_arg_t args;
+   int            ret;
+   
+   if(!gHbiDrvPriv.drvInitialised)
    {
-      return HBI_STATUS_NOT_INIT;
+        VPROC_U_DBG_PRINT(VPROC_DBG_LVL_ERR, "HBI_sleep driver not init failed\n");
+	    return HBI_STATUS_NOT_INIT;
    }
+         
 
-   return HBI_STATUS_INTERNAL_ERR;
+         args.handle = handle;
+         ret = ioctl(fd,HBI_SLEEP,&args);
+         if(ret <0)
+         {
+            status = HBI_STATUS_RESOURCE_ERR;
+         }
+         else
+            status = args.status;
+			
+    VPROC_U_DBG_PRINT(VPROC_DBG_LVL_ERR, "ioctl %d, HBI_sleep = %d\n", ret, status);
+    return status;
 }
 
 hbi_status_t HBI_wake(hbi_handle_t handle)
 {
-   if(gDrvInitialised == FALSE)
+   hbi_status_t   status;
+   int fd=(int)handle;
+   hbi_lnx_drv_arb_arg_t args;
+   int            ret;
+   
+   if(!gHbiDrvPriv.drvInitialised)
    {
-      return HBI_STATUS_NOT_INIT;
+        return HBI_STATUS_NOT_INIT;
    }
+         
 
-   return HBI_STATUS_INTERNAL_ERR;
+        args.handle = handle;
+
+        ret = ioctl(fd,HBI_WAKE,&args);
+        if(ret <0)
+        {
+            status = HBI_STATUS_RESOURCE_ERR;
+        }
+        else
+            status = args.status;   
+   
+   return status;
 }
 
 

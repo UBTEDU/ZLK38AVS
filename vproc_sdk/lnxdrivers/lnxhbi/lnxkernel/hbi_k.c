@@ -1,27 +1,8 @@
 /*
 * hbi_k.c - kernel space driver for hbi over linux platform
 *
-* Copyright (c) 2016, Microsemi Corporation
-* All rights reserved.
-*
-* Redistribution and use in source and binary forms, with or without
-* modification, are permitted provided that the following conditions are met:
-*     * Redistributions of source code must retain the above copyright
-*       notice, this list of conditions and the following disclaimer.
-*     * Neither the name of the <organization> nor the
-*       names of its contributors may be used to endorse or promote products
-*       derived from this software without specific prior written permission.
-*
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
-* ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
-* WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-* DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
-* DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
-* (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
-* LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
-* ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-* (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
-* SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+* Copyright 2018 Microsemi Inc. All rights reserved.
+* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
 */
 
 #include "typedefs.h"
@@ -31,6 +12,7 @@
 #include "vproc_dbg.h"
 #include "fwr_image_headers.h"
 
+#include <linux/uaccess.h>
 #include <linux/cdev.h>
 #include <linux/fs.h>
 #include <linux/module.h>
@@ -42,7 +24,7 @@
 #include <linux/slab.h>
 #include <asm/uaccess.h>
 #include <linux/proc_fs.h>
-#if HBI_ENABLE_FWR_BIN  
+#if HBI_ENABLE_FWR_BIN
 #include <linux/firmware.h>
 #endif
 
@@ -54,13 +36,13 @@
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
 #define list_next_entry(pos, member) \
-        list_entry((pos)->member.next, typeof(*(pos)), member) 
+        list_entry((pos)->member.next, typeof(*(pos)), member)
 #endif
 
 static DECLARE_BITMAP(minors, VPROC_MAX_NUM_DEVS);
 int module_usage_count;
-    
-static void __exit hbi_drv_exit(void);
+
+static void hbi_drv_exit(void);
 #if (HBI_ENABLE_PROCFS)
 
 #if LINUX_VERSION_CODE < KERNEL_VERSION(3, 10, 0)
@@ -127,7 +109,7 @@ typedef enum
 }HBI_DEV_PROC_ENTRIES;
 
 /* device specific proc entries */
-struct hbi_lnx_drv_proc_entries dev_proc_entry[] = 
+struct hbi_lnx_drv_proc_entries dev_proc_entry[] =
 {
     {
         .name = "read_reg",
@@ -219,7 +201,7 @@ struct hbi_lnx_drv_proc_entries drv_proc_entry[] = {
             .read = hbi_proc_open_dev_rd
         }
     },
-    { 
+    {
         .name = "close_device",
         .proc_entry = NULL,
         .ops = {
@@ -295,7 +277,7 @@ static hbi_status_t hbi_load_staticimage_from_host(hbi_handle_t handle,uint8_t *
    SSL_memcpy(data.pData,pArg,HBI_BUFFER_SIZE);
 
    /*Firmware image is organised into chunks of fixed length and this information
-     is embedded in image header. Thus first read image header and 
+     is embedded in image header. Thus first read image header and
      then start reading chunks and loading on to device
    */
    data.size = HBI_BUFFER_SIZE;
@@ -327,7 +309,7 @@ static hbi_status_t hbi_load_staticimage_from_host(hbi_handle_t handle,uint8_t *
    /* Somehow direct memcpy from buffer is  giving me some memory issues.
    thus using pointer to pass on data from global buffer.
    */
-   
+
    /* This loops covers all firmware loading */
    for(i=hdr.hdr_len;i<fwr_len;i+=block_size)
    {
@@ -340,10 +322,10 @@ static hbi_status_t hbi_load_staticimage_from_host(hbi_handle_t handle,uint8_t *
             status = HBI_set_command(handle,HBI_CMD_LOAD_CFGREC_FROM_HOST,&data);
         } else {
             VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Invalid image type %d\n", hdr.image_type);
-            status = HBI_STATUS_INVALID_ARG;  
+            status = HBI_STATUS_INVALID_ARG;
         }
 
-        if (status != HBI_STATUS_SUCCESS) 
+        if (status != HBI_STATUS_SUCCESS)
         {
             VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Error %d:HBI_set_command(HBI_CMD_LOAD_FWR_FROM_HOST)\n", status);
             return status;
@@ -357,7 +339,7 @@ static hbi_status_t hbi_load_staticimage_from_host(hbi_handle_t handle,uint8_t *
            return status;
        }
    }
-   VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Firmware loaded into Device\n");  
+   VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Firmware loaded into Device\n");
 
    return status;
 }
@@ -376,7 +358,7 @@ static hbi_status_t internal_hbi_open(void **device,hbi_dev_cfg_t *devcfg)
 #if (HBI_ENABLE_PROCFS)
     int             i;
     uint8_t         dir_name[32];
-#endif    
+#endif
 
     VPROC_DBG_PRINT(VPROC_DBG_LVL_FUNC, "Enter...\n");
 
@@ -387,11 +369,11 @@ static hbi_status_t internal_hbi_open(void **device,hbi_dev_cfg_t *devcfg)
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Resource Error \n");
         return -1;
     }
- 
+
     SSL_memset(dev,0,sizeof(struct hbi_dev));
     SSL_memcpy(&(dev->devcfg),devcfg,sizeof(hbi_dev_cfg_t));
     VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Opening device %d, %d with addr : 0x%x bus num %d\n",dev->devcfg.deviceId, dev->devcfg.dev_lock, dev->devcfg.dev_addr,dev->devcfg.bus_num);
-    
+
     status = HBI_open(&(dev->hbi_handle),&(dev->devcfg));
     if(status !=  HBI_STATUS_SUCCESS)
     {
@@ -420,7 +402,7 @@ static hbi_status_t internal_hbi_open(void **device,hbi_dev_cfg_t *devcfg)
         }
         set_bit(dev_minor, minors);
     }
-    else 
+    else
     {
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Device file creation failed\n");
         HBI_close(dev->hbi_handle);
@@ -431,7 +413,7 @@ static hbi_status_t internal_hbi_open(void **device,hbi_dev_cfg_t *devcfg)
 
     /* Add it to the list of devices maintained by driver */
     INIT_LIST_HEAD(&(dev->list));
-    
+
 
 
     /* Add it to driver device list */
@@ -524,11 +506,11 @@ static hbi_status_t internal_hbi_close(struct hbi_dev *device)
 }
 
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)
 long  internal_hbi_drv_ioctl(
 #else
 int internal_hbi_drv_ioctl(struct inode *inode,
-#endif 
+#endif
                          struct file *filp, unsigned int cmd, unsigned long pArgs)
 {
     int ret=0;
@@ -552,19 +534,53 @@ int internal_hbi_drv_ioctl(struct inode *inode,
                  hbi_dev_info[i].pFirmware  = sdk_devices_info[i].pFirmware;
                  hbi_dev_info[i].pConfig    = sdk_devices_info[i].pConfig;
                  hbi_dev_info[i].isImage_typeC = sdk_devices_info[i].imageType;
-            
-             }            
+
+             }
              if (copy_to_user((hbi_dev_info_t *)pArgs,
 			                hbi_dev_info,
 			                VPROC_MAX_NUM_DEVS*sizeof(hbi_dev_info_t)));
              return 0;
         }
+        case HBI_SLEEP:
+        {
+            hbi_lnx_drv_arb_arg_t args;
+            args.status = HBI_sleep(dev->hbi_handle);
+				
+            ret = copy_to_user((void __user *)pArgs,
+                                 &args,
+                                 sizeof(hbi_lnx_drv_arb_arg_t));
+								 
+			VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "copy_to_user %d, HBI_sleep = %d\n", ret, args.status);					 
+            if(ret)
+            {
+                VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "copy_to_user failed\n");
+                return -1;
+            }				
+            return 0;
+        }		
+        case HBI_WAKE:
+        {
+            hbi_lnx_drv_arb_arg_t args;
+            args.status = HBI_wake(dev->hbi_handle);
+				
+            ret = copy_to_user((void __user *)pArgs,
+                                 &args,
+                                 sizeof(hbi_lnx_drv_arb_arg_t));
+								 
+			VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "copy_to_user %d, HBI_sleep = %d\n", ret, args.status);					 
+            if(ret)
+            {
+                VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "copy_to_user failed\n");
+                return -1;
+            }				
+            return 0;
+        }		
         case HBI_READ:
             VPROC_DBG_PRINT(VPROC_DBG_LVL_FUNC, "HBI_READ called\n");
         case HBI_WRITE:
         {
             hbi_lnx_drv_rw_arg_t args;
-             /* TODO: 256 some magical number took to avoid malloc n free 
+             /* TODO: 256 some magical number took to avoid malloc n free
                   for small bytes read.can be changed or set to max limit
              */
             uint8_t buffer[256];
@@ -579,7 +595,7 @@ int internal_hbi_drv_ioctl(struct inode *inode,
                 VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "NULL param passed\n");
                 return -EINVAL;
             }
-            
+
             ret = copy_from_user(&args,
                                 (const void __user *)pArgs,
                                 sizeof(hbi_lnx_drv_rw_arg_t));
@@ -588,9 +604,9 @@ int internal_hbi_drv_ioctl(struct inode *inode,
                 VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "copy_from_user failed!!\n");
                 return -EAGAIN;
             }
-            
+
  //           dev = (struct hbi_dev *)(args.handle);
-            
+
             /* use static for read length up to 256 */
             tmp = buffer;
             if(args.len > sizeof(buffer))
@@ -678,8 +694,8 @@ int internal_hbi_drv_ioctl(struct inode *inode,
                 VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "NULL ioctl arg passed\n");
                 return -EFAULT;
             }
-            
-            
+
+
             ret = copy_from_user(&args,
                                  (const void __user*)pArgs,
                                  sizeof(hbi_lnx_send_data_arg_t));
@@ -713,7 +729,7 @@ int internal_hbi_drv_ioctl(struct inode *inode,
 
             data.pData = (dev->hbi_buf.buf);
             data.size = args.data.size;
-            
+
             args.status = HBI_CMD(dev,HBI_CMD_LOAD_FWR_FROM_HOST,&data);
 
 
@@ -782,8 +798,8 @@ int internal_hbi_drv_ioctl(struct inode *inode,
                 VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "NULL ioctl arg passed\n");
                 return -EFAULT;
             }
-            
-            
+
+
             ret = copy_from_user(&args,
                                  (const void __user*)pArgs,
                                  sizeof(hbi_lnx_send_data_arg_t));
@@ -817,7 +833,7 @@ int internal_hbi_drv_ioctl(struct inode *inode,
 
             data.pData = (dev->hbi_buf.buf);
             data.size = args.data.size;
-            
+
             args.status = HBI_CMD(dev,HBI_CMD_LOAD_CFGREC_FROM_HOST,&data);
 
 
@@ -826,14 +842,14 @@ int internal_hbi_drv_ioctl(struct inode *inode,
                                  &args,
                                  sizeof(hbi_lnx_send_data_arg_t));
             return ret;
-        }        
+        }
         case HBI_FLASH_SAVE_FWR_CFGREC:
         {
 #ifdef FLASH_PRESENT
             hbi_lnx_flash_save_fwrcfg_arg_t  args;
 
             VPROC_DBG_PRINT(VPROC_DBG_LVL_FUNC, "HBI_FLASH_SAVE_FWR_CFGREC called\n");
-            
+
             if(!pArgs)
             {
                 VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "NULL ioctl arg passed\n");
@@ -866,7 +882,7 @@ int internal_hbi_drv_ioctl(struct inode *inode,
 #ifdef FLASH_PRESENT
             hbi_lnx_flash_save_fwrcfg_arg_t  args;
             char image_num[2]={0};
-            
+
             if(!pArgs)
             {
                 VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"NULL ioctl arg passed\n");
@@ -923,9 +939,9 @@ int internal_hbi_drv_ioctl(struct inode *inode,
 
             image_num[0] = (args.image_num >> 8) & 0xFF;
             image_num[1] = args.image_num & 0xFF;
-            
+
             VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Writing image num %d\n",*((int *)image_num));
-            
+
             args.status = HBI_CMD(dev,
                                  HBI_CMD_LOAD_FWRCFG_FROM_FLASH,
                                  image_num);
@@ -947,7 +963,7 @@ int internal_hbi_drv_ioctl(struct inode *inode,
                     VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "NULL ioctl arg passed\n");
                     return -EFAULT;
                 }
-            
+
                 ret = copy_from_user(&args,
                                     (const void __user*)pArgs,
                                     sizeof(hbi_lnx_flash_erase_fwcfg_arg_t));
@@ -956,7 +972,7 @@ int internal_hbi_drv_ioctl(struct inode *inode,
                     VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "copy_from_user failed\n");
                     return -EAGAIN;
                 }
-            
+
 //                dev = (struct hbi_dev *)(args.handle);
 
                 image_num[0]=(args.image_num >> 8) & 0xFF;
@@ -989,8 +1005,8 @@ static int hbi_io_open(struct inode *inode, struct file *filp)
     /* else parse through list of other devices*/
     list_for_each_entry(dev,&(hbi_lnx_drv_priv.list),list)
     {
-        
-        if (dev->t_dev == inode->i_rdev) 
+
+        if (dev->t_dev == inode->i_rdev)
         {
             status = 0;
             break;
@@ -1028,7 +1044,7 @@ static int hbi_io_close(struct inode *inode, struct file *filp)
 struct file_operations fops = {
     .open =         hbi_io_open,
     .release =      hbi_io_close,
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 10, 0)
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 4, 0)
     .unlocked_ioctl = internal_hbi_drv_ioctl,
 #else
     .ioctl = internal_hbi_drv_ioctl,
@@ -1057,7 +1073,7 @@ static inline int atoh(char *s,int size)
     unsigned char i = 0;
     for (i = 0; i< size; i++)
     {
-        c = *s++; 
+        c = *s++;
         if (c >= '0' && c <= '9')
         {
             val = (val << 4) +( c & 0x0F );
@@ -1175,7 +1191,7 @@ static hbi_status_t hbi_wr_bin_fw(struct hbi_dev *dev,
      fwrimg.size = chunk_len;
 
      status = HBI_set_command(dev->hbi_handle,HBI_CMD_LOAD_FWR_FROM_HOST, &fwrimg);
-     if ((status != HBI_STATUS_SUCCESS &&  status != HBI_STATUS_OP_INCOMPLETE)) 
+     if ((status != HBI_STATUS_SUCCESS &&  status != HBI_STATUS_OP_INCOMPLETE))
       {
          VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "HBI_write failed\n");
          return status;
@@ -1185,7 +1201,7 @@ static hbi_status_t hbi_wr_bin_fw(struct hbi_dev *dev,
    VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "2- Conclude boot image loading....\n");
 
    status = HBI_set_command((dev->hbi_handle),HBI_CMD_LOAD_FWR_COMPLETE,NULL);
-   if (status != HBI_STATUS_SUCCESS) 
+   if (status != HBI_STATUS_SUCCESS)
    {
      VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Error %d:HBI_CMD_BOOT_COMPLETE failed!\n", status);
    }
@@ -1226,7 +1242,7 @@ ssize_t hbi_proc_reg_rd_dump(struct file *filp, char __user *buf, size_t size, l
             /* issue just a warning */
            VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "copy_to_user failed with incomplete copy\n");
         }
-        
+
 
         VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Read %d bytes to user buf\n",j);
 
@@ -1274,7 +1290,7 @@ static hbi_status_t hbi_wr_bin_cfg(struct hbi_dev *dev,
      fwrimg.size = chunk_len;
 
      status = HBI_set_command(dev->hbi_handle,HBI_CMD_LOAD_CFGREC_FROM_HOST, &fwrimg);
-     if ((status != HBI_STATUS_SUCCESS &&  status != HBI_STATUS_OP_INCOMPLETE)) 
+     if ((status != HBI_STATUS_SUCCESS &&  status != HBI_STATUS_OP_INCOMPLETE))
       {
          VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "HBI_write failed\n");
          return status;
@@ -1288,8 +1304,8 @@ static hbi_status_t hbi_wr_bin_cfg(struct hbi_dev *dev,
    return status;
 }
 
- 
-static hbi_status_t hbi_load_binimage_from_host(struct hbi_dev *dev, uint8_t *pArg) 
+
+static hbi_status_t hbi_load_binimage_from_host(struct hbi_dev *dev, uint8_t *pArg)
 {
 
     hbi_status_t status;
@@ -1308,9 +1324,9 @@ static hbi_status_t hbi_load_binimage_from_host(struct hbi_dev *dev, uint8_t *pA
         return -1;
     }
     VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "request_firmware file to load %s \n",(char *)pArg);
-    ret = request_firmware(&twfw, (char *)pArg, dev->device);  
+    ret = request_firmware(&twfw, (char *)pArg, dev->device);
 
-    if (ret < 0) 
+    if (ret < 0)
     {
        VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "request_firmware failed to load %s \n",(char *)pArg);
     }
@@ -1360,21 +1376,21 @@ static hbi_status_t hbi_load_binimage_from_host(struct hbi_dev *dev, uint8_t *pA
     /* skip rest of the header jump to payload */
     if (hdr.image_type == HBI_IMG_TYPE_FWR)
     {
-        status = hbi_wr_bin_fw(dev, 
+        status = hbi_wr_bin_fw(dev,
         &(dev->hbi_buf.buf[hdr_len]),
         total_img_len,
         block_size);
-    } else if(hdr.image_type == HBI_IMG_TYPE_CR) 
+    } else if(hdr.image_type == HBI_IMG_TYPE_CR)
     {
-        status = hbi_wr_bin_cfg(dev, 
+        status = hbi_wr_bin_cfg(dev,
         &(dev->hbi_buf.buf[hdr_len]),
         total_img_len,
         block_size);
 
-    } else 
+    } else
     {
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Invalid image type %d\n", hdr.image_type);
-        status = HBI_STATUS_INVALID_ARG;  
+        status = HBI_STATUS_INVALID_ARG;
     }
 
     SSL_memset(&(dev->hbi_buf),0,sizeof(dev->hbi_buf));
@@ -1409,14 +1425,14 @@ ssize_t hbi_proc_reg_rd(struct file *filp, const char __user *buf, size_t size, 
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "No device opened\n");
         return -1;
     }
-    
+
     /*expected format dev_addr reg size */
     if(copy_from_user((void *)val,buf,size))
     {
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Couldn't copy whole user buffer\n");
         return -1;
     }
-    
+
     /* Get register to access */
     while(val[i++] != ' ');
     if(i >= size)
@@ -1519,21 +1535,21 @@ ssize_t hbi_proc_reg_wr(struct file *filp, const char __user *buf, size_t size, 
 }
 
 /*getDeviceClientId() - check whether the device to be openend is valid
- *  Args: 
+ *  Args:
  *         pDevCfg : pointer to the device bus number and the address on the bus
  * Return:
  *         deviceId (integer index number of the device in the list of available devices) if success, -1 if failure
  */
 
 static int hbi_get_deviceid(uint8_t bus_num, uint8_t dev_addr) {
-    /*Device ID out of range check*/ 
+    /*Device ID out of range check*/
     int i = 0;
     for(i=0;i<VPROC_MAX_NUM_DEVS;i++)
     {
-        if ((sdk_devices_info[i].dev_addr == dev_addr) && 
+        if ((sdk_devices_info[i].dev_addr == dev_addr) &&
            (sdk_devices_info[i].bus_num == bus_num))
         {
-            return i;                                
+            return i;
         }
     }
     return -1;
@@ -1552,7 +1568,7 @@ ssize_t hbi_proc_open_dev_wr(struct file *filp, const char __user *buf, size_t s
     VPROC_DBG_PRINT(VPROC_DBG_LVL_FUNC, "Enter...\n");
 
     memset(val,0,sizeof(val));
-    
+
     if(copy_from_user((void *)val,buf,size))
     {
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Couldn't copy whole user buffer\n");
@@ -1575,7 +1591,7 @@ ssize_t hbi_proc_open_dev_wr(struct file *filp, const char __user *buf, size_t s
     devcfg.deviceId = hbi_get_deviceid(devcfg.bus_num, devcfg.dev_addr);
     if (devcfg.deviceId < 0)
         return -1;
-    
+
     VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "received dev_addr 0x%x bus number %d \n",
                   (unsigned int)(devcfg.dev_addr),devcfg.bus_num);
 
@@ -1621,8 +1637,8 @@ ssize_t hbi_proc_open_dev_rd(struct file *filp,  char __user *buf, size_t size, 
 }
 
 
-ssize_t hbi_proc_close_dev_wr(struct file *filp, 
-                              const char __user *buf, 
+ssize_t hbi_proc_close_dev_wr(struct file *filp,
+                              const char __user *buf,
                               size_t size, loff_t *offset)
 {
     uint8_t           val[16];
@@ -1678,8 +1694,8 @@ ssize_t hbi_proc_close_dev_wr(struct file *filp,
     return size;
 }
 
-ssize_t hbi_proc_wr_cfgrec(struct file *filp, 
-                           const char __user *buf, 
+ssize_t hbi_proc_wr_cfgrec(struct file *filp,
+                           const char __user *buf,
                            size_t size, loff_t *offset)
 {
 #define APP_RST_WAIT 10000
@@ -1721,12 +1737,12 @@ ssize_t hbi_proc_wr_cfgrec(struct file *filp,
 
     while(i<size)
     {
-    if(kbuf[i] != ';') 
+    if(kbuf[i] != ';')
     {
         if (sscanf(&kbuf[i], "%x %c %x", (unsigned int *)&reg, &c, (unsigned int *)&val) == 3)
         {
             /*
-            TODO: this is probably slower approach to write every 2 bytes. 
+            TODO: this is probably slower approach to write every 2 bytes.
             We can change implementation to accumulate the data upto allowed limit and
             then write. This implementation to be revisit during performance evaluation.
             */
@@ -1778,7 +1794,7 @@ ssize_t hbi_proc_wr_cfgrec(struct file *filp,
     return size;
 }
 
-ssize_t hbi_proc_load_fw(struct file *filp, 
+ssize_t hbi_proc_load_fw(struct file *filp,
                         const char __user *buf, size_t size, loff_t *offset)
 {
     struct hbi_dev    *dev = (struct hbi_dev *)(DEVP(filp));
@@ -1812,12 +1828,12 @@ ssize_t hbi_proc_load_fw(struct file *filp,
         return -1;
     }
 
-    /* this function ideally should be loading image on to device. 
+    /* this function ideally should be loading image on to device.
     however sometimes file write operation using cat command/linux shell
-    gives data in chunk rather than one buffer with whole image. 
-    in such scenario we were getting checksum error after downloading to 
+    gives data in chunk rather than one buffer with whole image.
+    in such scenario we were getting checksum error after downloading to
     device was complete. We probably were missing out on information.
-    So on safer note, this command accumulates complete data in kernel  
+    So on safer note, this command accumulates complete data in kernel
     buffer and then written to device
     */
     if(copy_from_user(&(dev->hbi_buf.buf[dev->hbi_buf.len]),buf,size))
@@ -1829,7 +1845,7 @@ ssize_t hbi_proc_load_fw(struct file *filp,
     dev->hbi_buf.len += size;
     if(first)
     {
-        /* if this the first chunk received, parse header and 
+        /* if this the first chunk received, parse header and
         get total image len */
         img.pData = dev->hbi_buf.buf;
         img.size = dev->hbi_buf.len;
@@ -1853,7 +1869,7 @@ ssize_t hbi_proc_load_fw(struct file *filp,
     VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Passing fwr image of size 0x%x\n",total_img_len);
 
     /* skip rest of the header jump to payload */
-    status = hbi_wr_bin_fw(dev, 
+    status = hbi_wr_bin_fw(dev,
     &(dev->hbi_buf.buf[hdr_len]),
     total_img_len,
     block_size);
@@ -1872,7 +1888,7 @@ ssize_t hbi_proc_load_fw(struct file *filp,
     return size;
 }
 
-ssize_t hbi_proc_start_fw(struct file *filp,  char __user *buf, 
+ssize_t hbi_proc_start_fw(struct file *filp,  char __user *buf,
                            size_t size, loff_t *offset)
 {
     struct hbi_dev   *pDev=(struct hbi_dev *)(DEVP(filp));
@@ -1898,8 +1914,8 @@ ssize_t hbi_proc_start_fw(struct file *filp,  char __user *buf,
     return 0;
 }
 
-ssize_t hbi_proc_rd_cfgrec(struct file *filp,  
-                           char __user *buf, 
+ssize_t hbi_proc_rd_cfgrec(struct file *filp,
+                           char __user *buf,
                            size_t size, loff_t *offset)
 {
     hbi_status_t    status;
@@ -1957,8 +1973,8 @@ ssize_t hbi_proc_save_fwrcfgrec_to_flash(struct file *filp,  char __user *buf, s
 }
 
 
-ssize_t hbi_proc_load_fwrcfgrec_from_flash(struct file *filp, 
-                                          const char __user *buf, 
+ssize_t hbi_proc_load_fwrcfgrec_from_flash(struct file *filp,
+                                          const char __user *buf,
                                           size_t size, loff_t *offset)
 {
     struct hbi_dev *dev = (struct hbi_dev *)(DEVP(filp));
@@ -1973,7 +1989,7 @@ ssize_t hbi_proc_load_fwrcfgrec_from_flash(struct file *filp,
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "NULL device handle\n");
         return -1;
     }
-    
+
     if(copy_from_user(&tmp,buf,size))
     {
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Couldn't copy whole data\n");
@@ -2002,8 +2018,8 @@ ssize_t hbi_proc_load_fwrcfgrec_from_flash(struct file *filp,
 }
 
 
-ssize_t hbi_proc_erase_img_from_flash(struct file *filp, 
-                                    const char __user *buf, 
+ssize_t hbi_proc_erase_img_from_flash(struct file *filp,
+                                    const char __user *buf,
                                     size_t size, loff_t *offset)
 {
     struct hbi_dev *dev = (struct hbi_dev *)(DEVP(filp));
@@ -2019,13 +2035,13 @@ ssize_t hbi_proc_erase_img_from_flash(struct file *filp,
         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "NULL device handle\n");
         return -1;
     }
-    
+
     if(copy_from_user(&tmp,buf,size))
     {
       VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "copy_from_user failed. couldn't copy whole user arg\n");
       return -1;
     }
-    
+
     SSL_memset(image_num,0,sizeof(image_num));
 
     tmp = atoi((char *)&tmp,size);
@@ -2045,7 +2061,7 @@ ssize_t hbi_proc_erase_img_from_flash(struct file *filp,
     return size;
 }
 
-ssize_t hbi_proc_erase_flash(struct file *filp,  
+ssize_t hbi_proc_erase_flash(struct file *filp,
                               char __user *buf, size_t size, loff_t *offset)
 {
     struct hbi_dev *dev = (struct hbi_dev*)(DEVP(filp));
@@ -2071,7 +2087,7 @@ ssize_t hbi_proc_erase_flash(struct file *filp,
 ssize_t hbi_proc_drv_init(struct file *filp,  char __user *buf, size_t size, loff_t *offset)
 {
     hbi_status_t status = HBI_init(NULL);
-    
+
     VPROC_DBG_PRINT(VPROC_DBG_LVL_FUNC, "Enter...\n");
 
     if(status != HBI_STATUS_SUCCESS)
@@ -2087,7 +2103,7 @@ ssize_t hbi_proc_drv_init(struct file *filp,  char __user *buf, size_t size, lof
 ssize_t hbi_proc_drv_term(struct file *filp,  char __user *buf, size_t size, loff_t *offset)
 {
     hbi_status_t status = HBI_term();
-    
+
     VPROC_DBG_PRINT(VPROC_DBG_LVL_FUNC, "Enter...\n");
 
     if(status != HBI_STATUS_SUCCESS)
@@ -2170,7 +2186,7 @@ static int __init hbi_drv_init(void)
 
     /* initialise device list */
     INIT_LIST_HEAD(&(hbi_lnx_drv_priv.list));
-    
+
     /* register HBI driver as character device driver  - Allocate driver instances
      * as per specified major number
      */
@@ -2187,7 +2203,7 @@ static int __init hbi_drv_init(void)
         unregister_chrdev_region(hbi_lnx_drv_priv.dev_t,VPROC_MAX_NUM_DEVS);
         return -1;
     }
-    
+
     cdev_init(hbi_lnx_drv_priv.cdev,&fops);
 
     ret = cdev_add(hbi_lnx_drv_priv.cdev,hbi_lnx_drv_priv.dev_t,VPROC_MAX_NUM_DEVS);
@@ -2197,23 +2213,23 @@ static int __init hbi_drv_init(void)
         cdev_del(hbi_lnx_drv_priv.cdev);
         return ret;
     }
-    
+
 #if (HBI_ENABLE_PROCFS)
     VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Init PROC FS\n");
     procfs_init();
-#endif    
-    
+#endif
+
     hbi_lnx_drv_priv.dev_class = class_create(THIS_MODULE,HBI_DEV_NAME);
     if(hbi_lnx_drv_priv.dev_class)
     {
- 
+
         struct hbi_dev *dev=NULL;
         hbi_status_t status;
         int i;
         hbi_dev_cfg_t devcfg;
-        
+
         HBI_init(NULL);
-        
+
         for(i=0;i<VPROC_MAX_NUM_DEVS;i++)
         {
             devcfg.dev_addr = sdk_devices_info[i].dev_addr;
@@ -2235,20 +2251,20 @@ static int __init hbi_drv_init(void)
             {
 
                 if (!sdk_devices_info[i].imageType) {
-#if HBI_LOAD_FWR_STATIC                                                    
-                    VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Boot loading Vproc *.h image to device %d with addr : 0x%x bus num %d\n",devcfg.deviceId, devcfg.dev_addr,devcfg.bus_num);                       
+#if HBI_LOAD_FWR_STATIC
+                    VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Boot loading Vproc *.h image to device %d with addr : 0x%x bus num %d\n",devcfg.deviceId, devcfg.dev_addr,devcfg.bus_num);
                     status = hbi_load_staticimage_from_host(dev->hbi_handle, sdk_devices_info[i].pFirmware);
                     if(status != HBI_STATUS_SUCCESS)
                     {
                         VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Error %d, Config loading from host failed!!!\n", status);
                     }
 #endif
-#if HBI_LOAD_CFGREC_STATIC                      
+#if HBI_LOAD_CFGREC_STATIC
                     status = hbi_load_staticimage_from_host(dev->hbi_handle, sdk_devices_info[i].pConfig);
-#endif                    
+#endif
                 } else {
 #if HBI_ENABLE_FWR_BIN
-                    VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Boot loading Vproc *.bin image to device %d with addr : 0x%x bus num %d\n",devcfg.deviceId, devcfg.dev_addr,devcfg.bus_num);                       
+                    VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Boot loading Vproc *.bin image to device %d with addr : 0x%x bus num %d\n",devcfg.deviceId, devcfg.dev_addr,devcfg.bus_num);
                     status = hbi_load_binimage_from_host(dev, sdk_devices_info[i].pFirmware);
                     if(status != HBI_STATUS_SUCCESS)
                     {
@@ -2256,7 +2272,7 @@ static int __init hbi_drv_init(void)
                     }
                     status = hbi_load_binimage_from_host(dev, sdk_devices_info[i].pConfig);
 #endif
-                }                
+                }
                 if(status != HBI_STATUS_SUCCESS)
                 {
                     VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "Error %d, Firmware loading from host failed!!!\n", status);
@@ -2287,7 +2303,7 @@ static int __init hbi_drv_init(void)
     return 0;
 }
 
-static void __exit hbi_drv_exit(void)
+static void hbi_drv_exit(void)
 {
     struct hbi_dev *dev,*next_dev;
 
@@ -2306,7 +2322,7 @@ static void __exit hbi_drv_exit(void)
         }
 //        internal_hbi_close(hbi_lnx_drv_priv.dev);
     }
-    
+
     VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO, "Calling HBI_term()\n");
     if(HBI_term() != HBI_STATUS_SUCCESS)
     {
@@ -2335,11 +2351,13 @@ EXPORT_SYMBOL(HBI_write);
 EXPORT_SYMBOL(HBI_reset);
 EXPORT_SYMBOL(HBI_set_command);
 EXPORT_SYMBOL(HBI_get_header);
+EXPORT_SYMBOL(HBI_wake);
+EXPORT_SYMBOL(HBI_sleep);
 
 module_init(hbi_drv_init);
 module_exit(hbi_drv_exit);
 
-MODULE_AUTHOR("Shally Verma <shally.verna@microsemi.com>");
+MODULE_AUTHOR("Jean Bony <jean.bony@microsemi.com>");
 MODULE_DESCRIPTION("Microsemi Timberwolf Voice Processor Driver");
 MODULE_LICENSE("GPL");
 

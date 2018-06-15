@@ -1,2 +1,14 @@
-this is kernel source code matching to distribution package 
-raspberry pi debian wheezy version 1.4.0 2015-02-18. this is based on kernel 3.18.7+. 
+Pi kernel for cross-compile
+If you have a specific Pi kernel you would like to compile with the SDK, put it here
+under a folder name linux.
+
+dts:
+Regarding I2C speed - the default I2C speed is 100Kbps, to change it to 400Kbps
+add the line below into 
+
+On the latest Raspbian releases, All that’s needed is To do this, edit /boot/config.txt and add the line:
+
+dtparam=i2c1_baudrate=400000
+
+To use SPI or I2C make sure to edit /boot/config.txt with the overlays= the exact name one of the overlays (without extension) in the dts folder.
+Also copy the *.dtbo into /boot/overlays/

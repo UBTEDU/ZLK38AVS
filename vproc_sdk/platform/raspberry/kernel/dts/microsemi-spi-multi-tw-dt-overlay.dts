@@ -1,0 +1,49 @@
+// Overlay to enable brcm SPI controller device and disable virtual SPIDEV device at chip select 0 on Raspberry Pi Platform
+// in RPI 1 Model B, microsemi vproc devices uses SPI BUS 0 and CHIP SELECT 0 however current kernel hools a virtual SPIDEV device at both 0 and 1.
+// we need to disable that to hook microsemi vproc device at SPI bus 0
+/dts-v1/;
+/plugin/;
+
+/ {
+	compatible = "brcm,bcm2708","brcm,bcm2709";
+	fragment@0 {
+		target = <&soc>;
+		__overlay__ {
+			spi0: spi@7e204000{
+				status = "okay";				
+			};
+		};
+	};
+	fragment@1 {
+		target = <&spi0>;
+		__overlay__ {
+			spidev@0{
+				status = "disabled";
+			};
+			spidev@1{
+				status = "disabled";
+			};
+		};
+	};
+
+	fragment@2 {
+		target = <&spi0>;
+		__overlay__ {
+		    #size-cells = <0>;
+		    #address-cells = <1>;
+			hbi0@0 {				
+				compatible = "microsemi,zl38xx0";
+				reg = <0>;
+				spi-max-frequency = <20000000>;
+				status = "okay";
+			};
+			hbi1@1 {
+				compatible = "microsemi,zl38xx1";
+				reg = <1>;
+				spi-max-frequency = <20000000>;
+				status = "okay";
+			};
+		};
+	};	
+};
+

@@ -1,0 +1,27 @@
+// Overlay to enable ZL380xx device registration via I2C
+/dts-v1/;
+/plugin/;
+
+/ {
+    compatible =  "brcm,bcm2708","brcm,bcm2709";
+
+    fragment@0 {
+        target = <&i2c_arm>;
+	__overlay__ {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		status = "okay";
+	
+		zl38xx0: zl38xx0@45 {
+			compatible = "microsemi,zl38xx0";
+			reg = <0x45>;
+			status = "okay";
+		};
+		zl38xx1: zl38xx1@52 {
+			compatible = "microsemi,zl38xx1";
+			reg = <0x52>;
+			status = "okay";
+		};					
+        };
+    };
+};
