@@ -1,5 +1,5 @@
 /*
-* hbi_k.h - header file for hbi kernel space driver 
+* hbi_k.h - header file for hbi kernel space driver
 *
 * Copyright (c) 2016, Microsemi Corporation
 * All rights reserved.
@@ -12,7 +12,7 @@
 *       names of its contributors may be used to endorse or promote products
 *       derived from this software without specific prior written permission.
 *
-* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" 
+* THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
 * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
 * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
 * DISCLAIMED. IN NO EVENT SHALL <COPYRIGHT HOLDER> BE LIABLE FOR ANY
@@ -23,8 +23,11 @@
 * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 */
-
+#include "hbi.h"
 #define HBI_LNX_DRV_MAGIC 'q'
+
+#define HBI_DEV_NAME "hbi"
+
 
 typedef struct hbi_lnx_drv_rw_arg
 {
@@ -81,6 +84,12 @@ typedef struct {
    hbi_status_t status;
 }hbi_lnx_drv_status_arg_t;
 
+typedef struct {
+   hbi_handle_t handle;
+   hbi_status_t status;
+}hbi_lnx_drv_arb_arg_t;
+
+
 typedef hbi_lnx_drv_status_arg_t hbi_lnx_start_fw_arg_t;
 typedef hbi_lnx_drv_status_arg_t hbi_lnx_drv_term_arg_t;
 typedef hbi_lnx_drv_status_arg_t hbi_lnx_ldfw_done_arg_t;
@@ -102,33 +111,40 @@ typedef hbi_lnx_drv_status_arg_t hbi_lnx_ldfw_done_arg_t;
     */
 
 /* ioctl called when loading firmware from host.*/
-#define HBI_LOAD_FW     _IOWR(HBI_LNX_DRV_MAGIC,7,hbi_lnx_send_data_arg_t) 
+#define HBI_LOAD_FW     _IOWR(HBI_LNX_DRV_MAGIC,7,hbi_lnx_send_data_arg_t)
 
-/* Load FW complete into VPROC device memory 
+/* Load FW complete into VPROC device memory
    (should be called after HBI_LOAD_FW or HBI_FLASH_LOAD_FWR_CFGREC) */
 #define HBI_LOAD_FW_COMPLETE _IOWR(HBI_LNX_DRV_MAGIC,8,hbi_lnx_ldfw_done_arg_t)
 
-/* start firmware execution i.e. loaded into VPROC device memory 
+/* start firmware execution i.e. loaded into VPROC device memory
    (should be called after HBI_LOAD_FW or HBI_FLASH_LOAD_FWR_CFGREC) */
-#define HBI_START_FW    _IOWR(HBI_LNX_DRV_MAGIC,9,hbi_lnx_start_fw_arg_t) 
+#define HBI_START_FW    _IOWR(HBI_LNX_DRV_MAGIC,9,hbi_lnx_start_fw_arg_t)
 
 /* Following ioctl are defined based in FLASH_PRESENT macro */
 
-/* ioctl to save loaded firmware into RAM to flash. 
+/* ioctl to save loaded firmware into RAM to flash.
    should be called after HBI_LOAD_FW*/
-#define HBI_FLASH_SAVE_FWR_CFGREC  _IOWR(HBI_LNX_DRV_MAGIC,10,hbi_lnx_flash_save_fwrcfg_arg_t) 
+#define HBI_FLASH_SAVE_FWR_CFGREC  _IOWR(HBI_LNX_DRV_MAGIC,10,hbi_lnx_flash_save_fwrcfg_arg_t)
 
-/* ioctl to read specified firmware image from flash. 
+/* ioctl to read specified firmware image from flash.
    can be called anytime */
-#define HBI_FLASH_LOAD_FWR_CFGREC  _IOWR(HBI_LNX_DRV_MAGIC,11,hbi_lnx_flash_load_fwrcfg_arg_t) 
+#define HBI_FLASH_LOAD_FWR_CFGREC  _IOWR(HBI_LNX_DRV_MAGIC,11,hbi_lnx_flash_load_fwrcfg_arg_t)
 
 /* ioctl to erase specific firmware image from flash. */
-#define HBI_FLASH_ERASE_FWRCFGREC  _IOWR(HBI_LNX_DRV_MAGIC,12,hbi_lnx_flash_erase_fwcfg_arg_t) 
+#define HBI_FLASH_ERASE_FWRCFGREC  _IOWR(HBI_LNX_DRV_MAGIC,12,hbi_lnx_flash_erase_fwcfg_arg_t)
 
 /* ioctl to erase complete firmware image from flash. */
 #define HBI_FLASH_ERASE_WHOLE      _IOWR(HBI_LNX_DRV_MAGIC,13,hbi_lnx_flash_erase_fwcfg_arg_t)
 
+#define HBI_UPDATE                 _IOWR(HBI_LNX_DRV_MAGIC,14,hbi_dev_info_t)
 
+/* ioctl called when loading config from host.*/
+#define HBI_LOAD_CFG     _IOWR(HBI_LNX_DRV_MAGIC,15,hbi_lnx_send_data_arg_t)
+#define HBI_FLASH_SAVE_CFGREC  _IOWR(HBI_LNX_DRV_MAGIC,16,hbi_lnx_flash_save_fwrcfg_arg_t)
+
+#define HBI_SLEEP     _IOWR(HBI_LNX_DRV_MAGIC,17,hbi_lnx_drv_arb_arg_t)
+#define HBI_WAKE      _IOWR(HBI_LNX_DRV_MAGIC,18,hbi_lnx_drv_arb_arg_t)
 
 
 

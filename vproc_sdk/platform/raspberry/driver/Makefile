@@ -1,6 +1,7 @@
 include $(ROOTDIR)/Makefile.globals
 
-SUBDIRS := sound ssl 
+#SUBDIRS := sound ssl 
+SUBDIRS := ssl
 
 .PHONY: all $(SUBDIRS)
 

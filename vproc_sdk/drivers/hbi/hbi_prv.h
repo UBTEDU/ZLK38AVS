@@ -7,13 +7,14 @@
 #ifndef __HBI_PRV_H__
 #define __HBI_PRV_H__
 
-#ifndef HBI_MAX_INSTANCES
-#define HBI_MAX_INSTANCES 1 
-#endif
+
 
 #ifndef HBI_MAX_INST_PER_DEV
 #define HBI_MAX_INST_PER_DEV 1
 #endif
+
+#define HBI_MAX_INSTANCES (HBI_MAX_INST_PER_DEV * VPROC_MAX_NUM_DEVS)
+
 
 #define HBI_LOCK(lock, wait) \
    if(lock) SSL_lock(lock,wait); \

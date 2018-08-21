@@ -45,7 +45,7 @@ static int snd_microsemi_dac_hw_params(struct snd_pcm_substream *substream,
     struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
     unsigned int sample_bits = snd_pcm_format_physical_width(params_format(params));
 
-    return snd_soc_dai_set_bclk_ratio(cpu_dai, sample_bits * 2);
+    return snd_soc_dai_set_bclk_ratio(cpu_dai, sample_bits * 4);
 }
 
 /* machine stream operations */
@@ -66,7 +66,7 @@ static struct snd_soc_dai_link snd_microsemi_dac_dai[] = {
     .platform_name  = "bcm2708-i2s.0",
     .codec_name     = "zl380-codec",
     .dai_fmt        = SND_SOC_DAIFMT_I2S | SND_SOC_DAIFMT_NB_NF |
-                        SND_SOC_DAIFMT_CBM_CFM,
+                        SND_SOC_DAIFMT_CBM_CFM,  /*_CBM_CFM: Codec is MAster for clock and FS. For Codec slave: use _CBS_CFS*/
     .ops            = &snd_microsemi_dac_ops,
     .init           = snd_microsemi_dac_init,
     },

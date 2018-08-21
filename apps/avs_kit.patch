@@ -1,0 +1,1712 @@
+diff -Naur cp_avs-device-sdk/ESP/src/DummyESPDataProvider.cpp avs-device-sdk/ESP/src/DummyESPDataProvider.cpp
+--- cp_avs-device-sdk/ESP/src/DummyESPDataProvider.cpp	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/ESP/src/DummyESPDataProvider.cpp	2018-05-30 15:08:51.000000000 -0500
+@@ -18,7 +18,7 @@
+ namespace alexaClientSDK {
+ namespace esp {
+ 
+-DummyESPDataProvider::DummyESPDataProvider() : m_enabled{false} {
++DummyESPDataProvider::DummyESPDataProvider() : m_enabled{true} {
+ }
+ 
+ capabilityAgents::aip::ESPData DummyESPDataProvider::getESPData() {
+diff -Naur cp_avs-device-sdk/KWD/Sensory/src/CMakeLists.txt avs-device-sdk/KWD/Sensory/src/CMakeLists.txt
+--- cp_avs-device-sdk/KWD/Sensory/src/CMakeLists.txt	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/KWD/Sensory/src/CMakeLists.txt	2018-05-30 15:12:14.000000000 -0500
+@@ -3,9 +3,16 @@
+     SensoryKeywordDetector.cpp)
+ 
+ target_include_directories(SENSORY PUBLIC
+-	"${SENSORY_KEY_WORD_DETECTOR_INCLUDE_DIR}"
+-	"${KWD_SOURCE_DIR}/include" 
+-	"${SENSORY_SOURCE_DIR}/include")
++    "${SENSORY_KEY_WORD_DETECTOR_INCLUDE_DIR}"
++    "${KWD_SOURCE_DIR}/include" 
++    "${SENSORY_SOURCE_DIR}/include")
++
++include_directories(
++    "${CMAKE_SOURCE_DIR}/SampleApp/include"
++    "${CMAKE_SOURCE_DIR}/../../../vproc_sdk/drivers/hbi/inc"
++    "${CMAKE_SOURCE_DIR}/../../../vproc_sdk/include"
++    "${CMAKE_SOURCE_DIR}/../../../vproc_sdk/platform/raspberry/include"
++)
+ 
+ target_link_libraries(SENSORY KWD AVSCommon "${SENSORY_KEY_WORD_DETECTOR_LIB_PATH}")
+ 
+diff -Naur cp_avs-device-sdk/KWD/Sensory/src/SensoryKeywordDetector.cpp avs-device-sdk/KWD/Sensory/src/SensoryKeywordDetector.cpp
+--- cp_avs-device-sdk/KWD/Sensory/src/SensoryKeywordDetector.cpp	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/KWD/Sensory/src/SensoryKeywordDetector.cpp	2018-05-30 15:11:23.000000000 -0500
+@@ -18,6 +18,7 @@
+ #include <AVSCommon/Utils/Logger/Logger.h>
+ 
+ #include "Sensory/SensoryKeywordDetector.h"
++#include "SampleApp/Zle38Avs.h"
+ 
+ namespace alexaClientSDK {
+ namespace kwd {
+@@ -264,6 +265,13 @@
+         return false;
+     }
+ 
++    result = snsrSetInt(m_session, SNSR_OPERATING_POINT, 19);
++    if (result != SNSR_RC_OK) {
++        ACSDK_ERROR(
++            LX("Could not set search order").d("error", getSensoryDetails(m_session, result)));
++        return false;
++    }
++
+     if (!setUpRuntimeSettings(&m_session)) {
+         return false;
+     }
+@@ -311,6 +319,7 @@
+     std::vector<int16_t> audioDataToPush(m_maxSamplesPerPush);
+     ssize_t wordsRead;
+     SnsrRC result;
++
+     while (!m_isShuttingDown) {
+         bool didErrorOccur = false;
+         wordsRead = readFromStream(
+@@ -320,6 +329,10 @@
+             audioDataToPush.size(),
+             TIMEOUT_FOR_READ_CALLS,
+             &didErrorOccur);
++        // Replace the buffer content by the other audio stream
++        if (wordsRead > 0) {
++            Zle38AvsBoard.GetBuffer(audioDataToPush.data(), wordsRead);
++        }
+         if (didErrorOccur) {
+             /*
+              * Note that this does not include the overrun condition, which the base class handles by instructing the
+diff -Naur cp_avs-device-sdk/SampleApp/include/SampleApp/I2cLib.h avs-device-sdk/SampleApp/include/SampleApp/I2cLib.h
+--- cp_avs-device-sdk/SampleApp/include/SampleApp/I2cLib.h	1969-12-31 18:00:00.000000000 -0600
++++ avs-device-sdk/SampleApp/include/SampleApp/I2cLib.h	2018-03-21 18:14:03.000000000 -0500
+@@ -0,0 +1,48 @@
++/*
++* I2cLib.h  --  I2C Wrapper based on the Linux I2C_RDWR IOCTL Header
++*
++* Copyright 2018 Microsemi Inc. All rights reserved.
++* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
++*/
++
++#ifndef I2cLib_H
++#define I2cLib_H
++
++#include <stdio.h>
++#include <iostream>
++#include <linux/i2c.h>
++#include <linux/i2c-dev.h>
++#include <fcntl.h>
++#include <stdlib.h>
++#include <unistd.h>
++#include <sys/ioctl.h>
++
++
++class I2cLib {
++    public:
++        // Constructor, Destructor
++        I2cLib(unsigned char devAddr);
++        ~I2cLib(void);
++
++        // Functions
++        int WriteReg(unsigned char regAddr, unsigned char data);
++        int ReadReg(unsigned char regAddr, unsigned char *data, bool printErr = true);
++        int WriteBuff(unsigned char regAddr, unsigned char *data, unsigned char length);
++        int ReadBuff(unsigned char regAddr, unsigned char *data, unsigned char length);
++
++    private:
++        // Defines
++        static const unsigned char MAX_I2C_BUFF_LEN = 128;
++
++        // Variables
++        std::string  i2cFileName;
++        int i2cDescriptor;
++        unsigned char deviceAddress;
++        unsigned char buffData[MAX_I2C_BUFF_LEN];
++
++        // Functions
++        int OpenI2c();  // Called only in constructors
++        int CloseI2c(); // Called only in destructor
++};
++
++#endif
+diff -Naur cp_avs-device-sdk/SampleApp/include/SampleApp/KeywordObserver.h avs-device-sdk/SampleApp/include/SampleApp/KeywordObserver.h
+--- cp_avs-device-sdk/SampleApp/include/SampleApp/KeywordObserver.h	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/SampleApp/include/SampleApp/KeywordObserver.h	2018-05-30 15:50:35.000000000 -0500
+@@ -23,6 +23,7 @@
+ #include <AVSCommon/SDKInterfaces/KeyWordObserverInterface.h>
+ #include <DefaultClient/DefaultClient.h>
+ #include <ESP/ESPDataProviderInterface.h>
++#include <ESP/ESPDataModifierInterface.h>
+ 
+ namespace alexaClientSDK {
+ namespace sampleApp {
+@@ -42,7 +43,8 @@
+     KeywordObserver(
+         std::shared_ptr<defaultClient::DefaultClient> client,
+         capabilityAgents::aip::AudioProvider audioProvider,
+-        std::shared_ptr<esp::ESPDataProviderInterface> espProvider = nullptr);
++        std::shared_ptr<esp::ESPDataProviderInterface> espProvider = nullptr,
++        std::shared_ptr<esp::ESPDataModifierInterface> espModifier = nullptr);
+ 
+     /// @name KeyWordObserverInterface Functions
+     /// @{
+@@ -63,6 +65,7 @@
+ 
+     /// Echo Spatial Perception (ESP) provider.
+     std::shared_ptr<esp::ESPDataProviderInterface> m_espProvider;
++    std::shared_ptr<esp::ESPDataModifierInterface> m_espModifier;
+ };
+ 
+ }  // namespace sampleApp
+diff -Naur cp_avs-device-sdk/SampleApp/include/SampleApp/LedDriver.h avs-device-sdk/SampleApp/include/SampleApp/LedDriver.h
+--- cp_avs-device-sdk/SampleApp/include/SampleApp/LedDriver.h	1969-12-31 18:00:00.000000000 -0600
++++ avs-device-sdk/SampleApp/include/SampleApp/LedDriver.h	2018-03-21 18:14:03.000000000 -0500
+@@ -0,0 +1,111 @@
++/*
++* LedDriver.h  --  IS31FL3731 Wrapper Header
++*
++* Copyright 2018 Microsemi Inc. All rights reserved.
++* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
++*/
++
++#ifndef LedDriver_H
++#define LedDriver_H
++
++#include <stdio.h>
++#include <iostream>
++#include <cassert>
++#include <cmath>
++
++#include "SampleApp/I2cLib.h"
++
++namespace IS31 {
++    // Page register address
++    const unsigned char PAGE_REGISTER       = 0xFD;
++
++    // Value for setting the function page
++    const unsigned char FUNCTION_PAGE       = 0x0B;
++
++    // Function page register addresses
++    const unsigned char MODE_REGISTER       = 0x00;
++    const unsigned char FRAME_REGISTER      = 0x01;
++    const unsigned char AUTOPLAY1_REGISTER  = 0x02;
++    const unsigned char AUTOPLAY2_REGISTER  = 0x03;
++    const unsigned char BLINK_REGISTER      = 0x05;
++    const unsigned char AUDIOSYNC_REGISTER  = 0x06;
++    const unsigned char FRAMESTATE_REGISTER = 0x07;
++    const unsigned char BREATH1_REGISTER    = 0x08;
++    const unsigned char BREATH2_REGISTER    = 0x09;
++    const unsigned char SHUTDOWN_REGISTER   = 0x0A;
++    const unsigned char GAIN_REGISTER       = 0x0B;
++    const unsigned char ADC_REGISTER        = 0x0C;
++
++    // Operating mode register values
++    const unsigned char PICTURE_MODE        = 0x00;
++    const unsigned char AUTOPLAY_MODE       = 0x08;
++    const unsigned char AUDIOPLAY_MODE      = 0x18;
++
++    // Frame page register address offsets
++    const unsigned char ENABLE_OFFSET       = 0x00;
++    const unsigned char BLINK_OFFSET        = 0x12;
++    const unsigned char PWM_OFFSET          = 0x24;
++}
++
++class rgb {
++    public:
++        // Constructors
++        rgb(double red = 0, double green = 0, double blue = 0): r(red), g(green), b(blue) {}
++        rgb(const rgb &color) {r = color.r; g = color.g; b = color.b; }
++
++        // Variables
++        double r;   // a fraction between 0 and 1
++        double g;   // a fraction between 0 and 1
++        double b;   // a fraction between 0 and 1
++};
++
++class hsv {
++    public:
++        // Constructors
++        hsv(double hue = 0, double saturation = 0, double value = 0): h(hue), s(saturation), v(value) {}
++        hsv(const hsv &color) {h = color.h; s = color.s; v = color.v; }
++
++        // Variables
++        double h;   // angle in degrees between 0 and 360
++        double s;   // a fraction between 0 and 1
++        double v;   // a fraction between 0 and 1
++};
++
++class LedDriver : private I2cLib {
++    public:
++        // Constructor
++        LedDriver(unsigned char devAddr);
++
++        // Variables
++        bool ledDriverOpen;
++
++        // Functions
++        int WriteFuncReg(unsigned char regAddr, unsigned char data);
++        int ReadFuncReg(unsigned char regAddr, unsigned char *data);
++        void SelectFrame(unsigned char frame);
++        int WriteFrameReg(unsigned char regAddr, unsigned char data);
++        int WriteFrameBuff(unsigned char regAddr, unsigned char *data, unsigned char length);
++        void Reset(void);
++        void SetMode(unsigned char mode, unsigned char startingFrame = 0);
++        void DisplayFrame(unsigned char frame);
++        void SetAutoPlay(unsigned char loops, unsigned char frames, unsigned char delay);
++        void SetDisplayOptions(unsigned char intensityControl, unsigned char blinkEn, unsigned char blinkPeriod);
++        void SetBreathControl(unsigned char enable, unsigned char fadeOutTime, unsigned char fadeInTime, unsigned char extinguishTime);
++        void ControlLed(unsigned char index, unsigned char state);
++        void ControlBlink(unsigned char index, unsigned char state);
++        void ControlPwm(unsigned char index, unsigned char value);
++        hsv RgbToHsv(double r, double g, double b);
++        hsv RgbToHsv(rgb in);
++        rgb HsvToRgb(double h, double s, double v);
++        rgb HsvToRgb(hsv in);
++
++    private:
++        // Variables
++        unsigned char frame;
++        unsigned char ledCtrlCache[8][18];
++        unsigned char blinkCtrlCache[8][18];
++
++        // Functions
++};
++
++#endif
+diff -Naur cp_avs-device-sdk/SampleApp/include/SampleApp/Zle38Avs.h avs-device-sdk/SampleApp/include/SampleApp/Zle38Avs.h
+--- cp_avs-device-sdk/SampleApp/include/SampleApp/Zle38Avs.h	1969-12-31 18:00:00.000000000 -0600
++++ avs-device-sdk/SampleApp/include/SampleApp/Zle38Avs.h	2018-04-09 16:20:19.000000000 -0500
+@@ -0,0 +1,104 @@
++/*
++* Zle38Avs.h  --  ZLE38AVS board Header
++*
++* Copyright 2018 Microsemi Inc. All rights reserved.
++* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
++*/
++
++#ifndef ZLE38AVS_H
++#define ZLE38AVS_H
++
++#include <stdio.h>
++#include <unistd.h>
++#include <iostream>
++#include <cassert>
++#include <vector>
++#include <thread>
++#include <chrono>
++#include <cmath>
++#include <mutex>
++
++#include <fstream>
++
++#include "SampleApp/LedDriver.h"
++
++// Vproc SDK includes
++#define VPROC_MAX_NUM_DEVS 3
++extern "C" {
++    #include "typedefs.h"
++    #include "chip.h"
++    #include "hbi.h"
++}
++
++/*******************************/
++/*     -= Frame usage =-       */
++/*                             */
++/* DOA:         0, 1           */
++/* Blank:       2              */
++/* Thinking:    3, 4, 5        */
++/* Speaking:    6              */
++/* Non-DOA:     7              */
++/*******************************/
++
++class Zle38Avs : private LedDriver {
++    public:
++        // Constructor, Destructor
++        Zle38Avs(unsigned char devAddr = 0x74);
++        ~Zle38Avs(void);
++
++        // Functions
++        void StartDoa(void);
++        void StopDoa(void);
++        void StartThinking(void);
++        void StopThinking(void);
++        void StartSpeaking(void);
++        void StopSpeaking(void);
++        void StoreBuffer(const int16_t *buff, unsigned short numSamples);
++        void GetBuffer(int16_t *buff, unsigned short numSamples);
++        void DialogState(unsigned char state);
++        void ReadESP(unsigned long *vEnergy, unsigned long *aEnergy);
++
++    private:
++        // Defines
++        static const unsigned char NB_LEDS = 12;
++        static const unsigned short FG_BLUE = 180;
++        static constexpr double FG_BLUE_V = 1.0;
++        static const unsigned short BG_BLUE = 210;
++        static constexpr double BG_BLUE_V = 0.1;
++        static const unsigned short FADE_BLUE = (FG_BLUE + BG_BLUE) / 2;
++        static constexpr double FADE_BLUE_V = 0.4;
++        static constexpr double MIN_POWER_DB = -60;
++        static const unsigned short S_BUFF_SIZE = 20000;
++
++        // const 2D vector uniformly initialized
++        const std::vector<std::vector<unsigned char> > LED_MAP_ARR {
++            {98, 130, 114}, {96, 128, 112},
++            {54, 86, 70}, {52, 84, 68},
++            {50, 82, 66}, {48, 80, 64},
++            {6, 38, 22}, {4, 36, 20},
++            {2, 34, 18}, {0, 32, 16}, 
++            {102, 134, 118}, {100, 132, 116}
++        };
++
++        // Variables
++        bool doaRunning;
++        bool debug;
++        std::thread doaThread;
++        hbi_handle_t hbiHandle;
++        std::vector<int16_t> sensoryCircBuffer;
++        unsigned short writeIndex;
++        unsigned short readIndex;
++        std::mutex mtx;
++        std::ofstream sdsFile;
++        std::ofstream bypFile;
++
++        // Functions
++        void Zle38AvsRingSetup(void);
++        int Zle38AvsHbiSetup(void);
++        void SetDoaFrame(unsigned short angle, rgb fg, rgb fade, rgb bg);
++        void Doa(void);
++};
++
++extern Zle38Avs Zle38AvsBoard;
++
++#endif
+\ No newline at end of file
+diff -Naur cp_avs-device-sdk/SampleApp/src/CMakeLists.txt avs-device-sdk/SampleApp/src/CMakeLists.txt
+--- cp_avs-device-sdk/SampleApp/src/CMakeLists.txt	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/SampleApp/src/CMakeLists.txt	2018-05-30 15:16:16.000000000 -0500
+@@ -9,7 +9,10 @@
+     UIManager.cpp
+     UserInputManager.cpp
+     SampleApplication.cpp
+-    main.cpp)
++    main.cpp
++    I2cLib.cpp
++    LedDriver.cpp
++    Zle38Avs.cpp)
+ 
+ IF (HAS_EXTERNAL_MEDIA_PLAYER_ADAPTERS)
+     file(GLOB_RECURSE SRC_FILE ${CMAKE_CURRENT_SOURCE_DIR}/ExternalMediaAdapterRegistration/*.cpp)
+@@ -28,6 +31,17 @@
+     "${ESP_SOURCE_DIR}/include"
+     "${PORTAUDIO_INCLUDE_DIR}")
+ 
++include_directories(
++    "${CMAKE_SOURCE_DIR}/../../../vproc_sdk/drivers/hbi/inc"
++    "${CMAKE_SOURCE_DIR}/../../../vproc_sdk/include"
++    "${CMAKE_SOURCE_DIR}/../../../vproc_sdk/platform/raspberry/include"
++)
++
++set(hbi_libs
++    "${CMAKE_SOURCE_DIR}/../../../vproc_sdk/libs/hbi_u.o"
++    "${CMAKE_SOURCE_DIR}/../../../vproc_sdk/libs/hbi_tw.o"
++)
++
+ target_link_libraries(SampleApp 
+     DefaultClient
+     CapabilitiesDelegate
+@@ -35,6 +49,7 @@
+     MediaPlayer
+     SQLiteStorage
+     ESP
++    ${hbi_libs}
+     "${PORTAUDIO_LIB_PATH}")
+ 
+ if(KWD)
+diff -Naur cp_avs-device-sdk/SampleApp/src/I2cLib.cpp avs-device-sdk/SampleApp/src/I2cLib.cpp
+--- cp_avs-device-sdk/SampleApp/src/I2cLib.cpp	1969-12-31 18:00:00.000000000 -0600
++++ avs-device-sdk/SampleApp/src/I2cLib.cpp	2018-03-21 18:14:03.000000000 -0500
+@@ -0,0 +1,196 @@
++/*
++* I2cLib.cpp  --  I2C Wrapper based on the Linux I2C_RDWR IOCTL Implementation
++*
++* Copyright 2018 Microsemi Inc. All rights reserved.
++* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
++*/
++
++#include "SampleApp/I2cLib.h"
++
++using namespace std;
++
++/*******************************************************************
++ * Constructor
++ * *****************************************************************/
++I2cLib::I2cLib(unsigned char devAddr) {
++
++
++    this->i2cFileName = "/dev/i2c-1";
++    this->deviceAddress = devAddr;
++    this->i2cDescriptor = -1;
++    this->OpenI2c();
++}
++
++/**********************************************************************
++ * Destructor
++ * *********************************************************************/
++I2cLib::~I2cLib(void) {
++
++    this->CloseI2c();
++}
++
++/**********************************************************************
++ * System call - Open the device and keep track of the descriptor
++ * ********************************************************************/
++int I2cLib::OpenI2c() {
++
++    this->i2cDescriptor = open(i2cFileName.c_str(), O_RDWR);
++    if (this->i2cDescriptor < 0) {
++        cerr << "OpenI2c(): Could not open I2C file driver " << this->i2cDescriptor << endl;
++        exit(1);
++    }
++
++    return this->i2cDescriptor;
++}
++
++/*********************************************************************
++ * System call - Close the device based on the descriptor
++ * *******************************************************************/
++int I2cLib::CloseI2c() {
++    int retVal;
++
++    retVal = close(this->i2cDescriptor);
++    if (retVal < 0) {
++        cerr << "CloseI2c(): Could not close I2C file driver " << retVal << endl;
++    }
++
++    return retVal;
++}
++
++/********************************************************************
++ * Write one byte using a 8b address via the ioctl(I2C_RDWR) system function
++ ********************************************************************/
++int I2cLib::WriteReg(unsigned char regAddr, unsigned char data) {
++    unsigned char buff[2];
++    int retVal;
++    struct i2c_rdwr_ioctl_data packets;
++    struct i2c_msg messages[1];
++
++    buff[0] = regAddr;
++    buff[1] = data;
++
++    // Build the message
++    messages[0].addr = this->deviceAddress;
++    messages[0].flags = 0;
++    messages[0].len = sizeof(buff);
++    messages[0].buf = buff;
++
++    packets.msgs = messages;
++    packets.nmsgs = 1;
++
++    retVal = ioctl(this->i2cDescriptor, I2C_RDWR, &packets);
++    if (retVal < 0) {
++        cerr << "WriteReg(8bit): ioctl access failed " << retVal << endl;
++    }
++
++    return retVal;
++}
++
++/********************************************************************
++ * Read one byte using a 8b address via the ioctl(I2C_RDWR) system function
++ *  Write the register address to read then read one byte
++ * "printErr" can be set to false if the function is used to check silently
++ *  if a device is present on the bus 
++ ********************************************************************/
++int I2cLib::ReadReg(unsigned char regAddr, unsigned char *data, bool printErr) {
++    unsigned char outBuff;
++    int retVal;
++    struct i2c_rdwr_ioctl_data packets;
++    struct i2c_msg messages[2];
++
++    // Build the outgoing message
++    outBuff = regAddr;
++    messages[0].addr = this->deviceAddress;
++    messages[0].flags= 0;
++    messages[0].len = sizeof(outBuff);
++    messages[0].buf = &outBuff;
++
++    // Build the input message
++    messages[1].addr = this->deviceAddress;
++    messages[1].flags = I2C_M_RD;
++    messages[1].len = sizeof(*data);
++    messages[1].buf = data;
++
++    packets.msgs = messages;
++    packets.nmsgs = 2;
++
++    retVal = ioctl(this->i2cDescriptor, I2C_RDWR, &packets);
++    if ((retVal < 0) && printErr) {
++        cerr << "ReadReg(8bit): ioctl access failed " << retVal << endl;
++    }
++
++    return retVal;
++}
++
++/********************************************************************
++ * Write a buffer using a 8b address via the ioctl() system function
++ ********************************************************************/
++int I2cLib::WriteBuff(unsigned char regAddr, unsigned char *data, unsigned char length) {
++    int retVal;
++    struct i2c_rdwr_ioctl_data packets;
++    struct i2c_msg messages[1];
++
++    if (length > (this->MAX_I2C_BUFF_LEN - 1)) {
++        cerr << "WriteBuff(8bit): buffed exceeds " << (this->MAX_I2C_BUFF_LEN - 1) << " bytes" << endl;
++        return -1;
++    }
++
++    // Fill the data buffer starting with the address
++    this->buffData[0] = regAddr;
++    for (unsigned char i = 0; i < length; i++) {
++        this->buffData[i + 1] = data[i];
++    }
++
++    // Build the message
++    messages[0].addr = this->deviceAddress;
++    messages[0].flags = 0;
++    messages[0].len = length + 1;
++    messages[0].buf = this->buffData;
++
++    packets.msgs = messages;
++    packets.nmsgs = 1;
++
++    retVal = ioctl(this->i2cDescriptor, I2C_RDWR, &packets);
++    if (retVal < 0) {
++        cerr << "WriteBuff(8bit): ioctl access failed " << retVal << endl;
++    }
++
++    return retVal;
++}
++
++/********************************************************************
++ * Read a buffer using a 8b address via the ioctl() system function
++ *  Write the register address to read then read the buffer
++ ********************************************************************/
++int I2cLib::ReadBuff(unsigned char reg8BitAddr, unsigned char *data, unsigned char length) {
++    int retVal;
++    struct i2c_rdwr_ioctl_data packets;
++    struct i2c_msg messages[2];
++
++    if (length > (this->MAX_I2C_BUFF_LEN)) {
++        cerr << "ReadBuff(8bit): buffed exceeds " << (this->MAX_I2C_BUFF_LEN) << " bytes" << endl;
++        return -1;
++    }
++
++    // Build the outgoing message
++    messages[0].addr = this->deviceAddress;
++    messages[0].flags= 0;
++    messages[0].len = 1;
++    messages[0].buf = &reg8BitAddr;
++
++    // Build the input message
++    messages[1].addr = this->deviceAddress;
++    messages[1].flags = I2C_M_RD;
++    messages[1].len = length;
++    messages[1].buf = data;
++
++    packets.msgs = messages;
++    packets.nmsgs = 2;
++
++    retVal = ioctl(this->i2cDescriptor, I2C_RDWR, &packets);
++    if (retVal < 0) {
++        cerr << "ReadBuff(8bit): ioctl access failed " << retVal << endl;
++    }
++
++    return retVal;
++}
+diff -Naur cp_avs-device-sdk/SampleApp/src/KeywordObserver.cpp avs-device-sdk/SampleApp/src/KeywordObserver.cpp
+--- cp_avs-device-sdk/SampleApp/src/KeywordObserver.cpp	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/SampleApp/src/KeywordObserver.cpp	2018-05-30 15:59:12.000000000 -0500
+@@ -14,6 +14,7 @@
+  */
+ 
+ #include "SampleApp/KeywordObserver.h"
++#include "SampleApp/Zle38Avs.h"
+ 
+ namespace alexaClientSDK {
+ namespace sampleApp {
+@@ -21,10 +22,12 @@
+ KeywordObserver::KeywordObserver(
+     std::shared_ptr<defaultClient::DefaultClient> client,
+     capabilityAgents::aip::AudioProvider audioProvider,
+-    std::shared_ptr<esp::ESPDataProviderInterface> espProvider) :
++    std::shared_ptr<esp::ESPDataProviderInterface> espProvider,
++    std::shared_ptr<esp::ESPDataModifierInterface> espModifier) :
+         m_client{client},
+         m_audioProvider{audioProvider},
+-        m_espProvider{espProvider} {
++        m_espProvider{espProvider},
++        m_espModifier{espModifier} {
+ }
+ 
+ void KeywordObserver::onKeyWordDetected(
+@@ -33,6 +36,8 @@
+     avsCommon::avs::AudioInputStream::Index beginIndex,
+     avsCommon::avs::AudioInputStream::Index endIndex,
+     std::shared_ptr<const std::vector<char>> KWDMetadata) {
++    unsigned long voiceEnergy, ambientEnergy;
++
+     if (endIndex != avsCommon::sdkInterfaces::KeyWordObserverInterface::UNSPECIFIED_INDEX &&
+         beginIndex == avsCommon::sdkInterfaces::KeyWordObserverInterface::UNSPECIFIED_INDEX) {
+         if (m_client) {
+@@ -43,6 +48,12 @@
+         beginIndex != avsCommon::sdkInterfaces::KeyWordObserverInterface::UNSPECIFIED_INDEX) {
+         auto espData = capabilityAgents::aip::ESPData::EMPTY_ESP_DATA;
+         if (m_espProvider) {
++            if (m_espModifier) {
++                Zle38AvsBoard.ReadESP(&voiceEnergy, &ambientEnergy);
++                // Set the ESP data values to be sent to the AVS cloud
++                // m_espModifier->setVoiceEnergy(std::to_string(voiceEnergy));
++                // m_espModifier->setAmbientEnergy(std::to_string(ambientEnergy));
++            }
+             espData = m_espProvider->getESPData();
+         }
+ 
+diff -Naur cp_avs-device-sdk/SampleApp/src/LedDriver.cpp avs-device-sdk/SampleApp/src/LedDriver.cpp
+--- cp_avs-device-sdk/SampleApp/src/LedDriver.cpp	1969-12-31 18:00:00.000000000 -0600
++++ avs-device-sdk/SampleApp/src/LedDriver.cpp	2018-03-21 18:14:03.000000000 -0500
+@@ -0,0 +1,380 @@
++/*
++* LedDriver.cpp  --  IS31FL3731 Wrapper Implementation
++*
++* Copyright 2018 Microsemi Inc. All rights reserved.
++* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
++*/
++
++#include "SampleApp/LedDriver.h"
++
++using namespace std;
++
++/*******************************************************************
++ * Constructor
++ * *****************************************************************/
++LedDriver::LedDriver(unsigned char devAddr) : I2cLib(devAddr) {
++    unsigned char initArr[18] = {0};
++    unsigned char temp;
++
++    // Only proceed if the LED driver was successfully opened
++    if (I2cLib::ReadReg(0, &temp, false) < 0) {
++        this->ledDriverOpen = false;
++        return;
++    } else {
++        this->ledDriverOpen = true;
++    }
++
++    // Toggle the software shutdown
++    this->Reset();
++
++    // Set to picture mode
++    this->SetMode(IS31::PICTURE_MODE, 0);
++
++    // Disable all LEDs, disable blink control, and set brightness to 0 in all frames
++    for (unsigned char i = 0; i < 8; i++) {
++        this->SelectFrame(i);
++        this->WriteFrameBuff(IS31::ENABLE_OFFSET, initArr, 18);
++        this->WriteFrameBuff(IS31::BLINK_OFFSET, initArr, 18);
++        for (unsigned char j = 0; j < 8; j++) {
++            this->WriteFrameBuff(IS31::PWM_OFFSET + j * 18, initArr, 18);
++        }
++    }
++
++    // Display frame 0
++    this->SelectFrame(0);
++    this->DisplayFrame(0);
++
++    // Initialize the cache (for all 8 frames)
++    for (unsigned char i = 0; i < 8; i++) {
++        for (unsigned char j = 0; j < 18; j++) {
++            this->ledCtrlCache[i][j] = 0;
++            this->blinkCtrlCache[i][j] = 0;
++        }
++    }
++}
++
++/**********************************************************************
++ * Write a register of the function page and return to the current
++ * frame selection
++ * ********************************************************************/
++int LedDriver::WriteFuncReg(unsigned char regAddr, unsigned char data) {
++    int retVal;
++
++    retVal = I2cLib::WriteReg(IS31::PAGE_REGISTER, IS31::FUNCTION_PAGE);
++    if (retVal < 0) return retVal;
++    retVal = I2cLib::WriteReg(regAddr, data);
++    if (retVal < 0) return retVal;
++    retVal = I2cLib::WriteReg(IS31::PAGE_REGISTER, this->frame);
++
++    return retVal;
++}
++
++/**********************************************************************
++ * Read a register of the function page and return to the current
++ * frame selection
++ * ********************************************************************/
++int LedDriver::ReadFuncReg(unsigned char regAddr, unsigned char *data) {
++    int retVal;
++
++    retVal = I2cLib::WriteReg(IS31::PAGE_REGISTER, IS31::FUNCTION_PAGE);
++    if (retVal < 0) return retVal;
++    retVal = I2cLib::ReadReg(regAddr, data);
++    if (retVal < 0) return retVal;
++    retVal = I2cLib::WriteReg(IS31::PAGE_REGISTER, this->frame);
++
++    return retVal;
++}
++
++/**********************************************************************
++ * Select the frame to be written to (0 -> 7)
++ * Note: to be called when changing the frame register bank
++ * ********************************************************************/
++void LedDriver::SelectFrame(unsigned char frame) {
++
++    assert(frame < 8);
++    I2cLib::WriteReg(IS31::PAGE_REGISTER, frame);
++    this->frame = frame;
++}
++
++/**********************************************************************
++ * Write a register of the current frame
++ * Note: use SelectFrame() to select/change the frame
++ * ********************************************************************/
++int LedDriver::WriteFrameReg(unsigned char regAddr, unsigned char data) {
++
++    return I2cLib::WriteReg(regAddr, data);
++}
++
++/**********************************************************************
++ * Write a buffer in the current frame
++ * Note: use SelectFrame() to select/change the frame
++ * ********************************************************************/
++int LedDriver::WriteFrameBuff(unsigned char regAddr, unsigned char *data, unsigned char length) {
++
++    return I2cLib::WriteBuff(regAddr, data, length);
++}
++
++/**********************************************************************
++ * Maintain the IS31FL3731 in shutdown for 10ms
++ * ********************************************************************/
++void LedDriver::Reset() {
++
++    this->WriteFuncReg(IS31::SHUTDOWN_REGISTER, 0);
++    usleep(10000);
++    this->WriteFuncReg(IS31::SHUTDOWN_REGISTER, 1);
++}
++
++/**********************************************************************
++ * Select the mode for a given frame
++ * mode: PICTURE_MODE, AUTOPLAY_MODE, AUDIOPLAY_MODE
++ * startingFrame (only for AUTOPLAY_MODE): 0 -> 7
++ * ********************************************************************/
++void LedDriver::SetMode(unsigned char mode, unsigned char startingFrame) {
++
++    assert(startingFrame < 8);
++    this->WriteFuncReg(IS31::MODE_REGISTER, mode | startingFrame);
++}
++
++/**********************************************************************
++ * Select the active frame to display
++ * frame: 0 -> 7
++ * ********************************************************************/
++void LedDriver::DisplayFrame(unsigned char frame) {
++
++    assert(frame < 8);
++    this->WriteFuncReg(IS31::FRAME_REGISTER, frame);
++}
++
++/**********************************************************************
++ * Loop through a selected number of frames waiting a given delay
++ * loops: 0 (endless), 1->7 (# loops then stop)
++ * frames: 0->7 (# of frames in the loop)
++ * delay: 0 = 11ms, 1->63 x 11ms
++ * ********************************************************************/
++void LedDriver::SetAutoPlay(unsigned char loops, unsigned char frames, unsigned char delay) {
++
++    assert(loops < 8);
++    assert(frames < 8);
++    assert(delay < 64);
++    this->WriteFuncReg(IS31::AUTOPLAY1_REGISTER, (loops << 4) | frames);
++    this->WriteFuncReg(IS31::AUTOPLAY2_REGISTER, delay);
++}
++
++/**********************************************************************
++ * Loop through a selected number of frames waiting a given delay
++ * intensityControl: 0 (frames intensity independent), 1 (frames intensity based on frame 1)
++ * blinkEn: 0 (disabled), 1 (enabled)
++ * blinkPeriod: 0->7 x 270ms
++ * ********************************************************************/
++void LedDriver::SetDisplayOptions(unsigned char intensityControl, unsigned char blinkEn, unsigned char blinkPeriod) {
++
++    assert(intensityControl < 2);
++    assert(blinkEn < 2);
++    assert(blinkPeriod < 8);
++    this->WriteFuncReg(IS31::BLINK_REGISTER, (intensityControl << 5) | (blinkEn << 3) | blinkPeriod);
++}
++
++/**********************************************************************
++ * Loop through a selected number of frames waiting a given delay
++ * enable: 0 (disabled), 1 (enabled)
++ * fadeOutTime: 0->7 (26ms x 2^fadeOutTime)
++ * fadeInTime: 0->7 (26ms x 2^fadeInTime)
++ * extinguishTime: 0->7 (3.5ms x 2^extinguishTime)
++ * ********************************************************************/
++void LedDriver::SetBreathControl(unsigned char enable, unsigned char fadeOutTime, unsigned char fadeInTime, unsigned char extinguishTime) {
++
++    assert(enable < 2);
++    assert(fadeOutTime < 8);
++    assert(fadeInTime < 8);
++    assert(extinguishTime < 8);
++    this->WriteFuncReg(IS31::BREATH1_REGISTER, (fadeOutTime << 4) | fadeInTime);
++    this->WriteFuncReg(IS31::BREATH2_REGISTER, (enable << 4) | extinguishTime);
++}
++
++/**********************************************************************
++ * Turn on/off a given LED
++ * index: 0->143 (LED index in the matrix)
++ * state: 0 (off), 1 (on)
++ * ********************************************************************/
++void LedDriver::ControlLed(unsigned char index, unsigned char state) {
++    unsigned char offset = index / 8;
++    unsigned char idx = index % 8;
++
++    assert(index < 144);
++    assert(state < 2);
++    this->ledCtrlCache[this->frame][offset] = (this->ledCtrlCache[this->frame][offset] & ~(1 << idx)) | (state << idx);
++    this->WriteFrameReg(IS31::ENABLE_OFFSET + offset, this->ledCtrlCache[this->frame][offset]);
++}
++
++/**********************************************************************
++ * Turn on/off the blinker on a given LED
++ * index: 0->143 (LED index in the matrix)
++ * state: 0 (disabled), 1 (enabled)
++ * ********************************************************************/
++void LedDriver::ControlBlink(unsigned char index, unsigned char state) {
++    unsigned char offset = index / 8;
++    unsigned char idx = index % 8;
++
++    assert(index < 144);
++    assert(state < 2);
++    this->blinkCtrlCache[this->frame][offset] = (this->blinkCtrlCache[this->frame][offset] & ~(1 << idx)) | (state << idx);
++    this->WriteFrameReg(IS31::BLINK_OFFSET + offset, this->blinkCtrlCache[this->frame][offset]);
++}
++
++/**********************************************************************
++ * Control the brightness of a given LED
++ * index: 0->143 (LED index in the matrix)
++ * value: 0->63 (LED brightness)
++ * ********************************************************************/
++void LedDriver::ControlPwm(unsigned char index, unsigned char value) {
++    const unsigned char gammaTable[] = {
++        0, 1, 2, 3, 4, 5, 6, 7,
++        8, 10, 12, 14, 16, 18, 20, 22,
++        24, 26, 29, 32, 35, 38, 41, 44,
++        47, 50, 53, 57, 61, 65, 69, 73,
++        77, 81, 85, 89, 94, 99, 104, 109,
++        114, 119, 124, 129, 134, 140, 146, 152,
++        158, 164, 170, 176, 182, 188, 195, 202,
++        209, 216, 223, 230, 237, 244, 251, 255
++    };
++
++    assert(index < 144);
++    assert(value < 64);
++    this->WriteFrameReg(IS31::PWM_OFFSET + index, gammaTable[value]);
++}
++
++/**********************************************************************
++ * Convert a color from RGB to HSV
++ * r, g, b: 0.0->1.0
++ * ********************************************************************/
++hsv LedDriver::RgbToHsv(double r, double g, double b) {
++    rgb in(r, g, b);
++
++    return RgbToHsv(in);
++}
++
++hsv LedDriver::RgbToHsv(rgb in) {
++    hsv out;
++    double min, max, delta;
++
++    assert((in.r >= 0.0) && (in.r <= 1.0));
++    assert((in.g >= 0.0) && (in.g <= 1.0));
++    assert((in.b >= 0.0) && (in.b <= 1.0));
++
++    min = in.r < in.g ? in.r : in.g;
++    min = min  < in.b ? min  : in.b;
++
++    max = in.r > in.g ? in.r : in.g;
++    max = max  > in.b ? max  : in.b;
++
++    out.v = max;
++    delta = max - min;
++    if (delta < 0.00001) {
++        out.s = 0;
++        out.h = NAN;
++        return out;
++    }
++
++    if (max > 0.0) {
++        out.s = delta / max;
++    } else {
++        out.s = 0.0;
++        out.h = NAN;
++        return out;
++    }
++
++    if (in.r >= max) {
++        out.h = (in.g - in.b )/ delta;          // between yellow & magenta
++    } else if (in.g >= max) {
++        out.h = 2.0 + (in.b - in.r) / delta;    // between cyan & yellow
++    } else {
++        out.h = 4.0 + (in.r - in.g) / delta;    // between magenta & cyan
++    }
++
++    out.h *= 60.0;
++
++    if (out.h < 0.0) {
++        out.h += 360.0;
++    }
++
++    return out;
++}
++
++/**********************************************************************
++ * Convert a color from HSV to RGB
++ * h: 0.0->359.0
++ * s, v: 0.0->1.0
++ * ********************************************************************/
++rgb LedDriver::HsvToRgb(double h, double s, double v) {
++    hsv in(h, s, v);
++
++    return HsvToRgb(in);
++}
++
++rgb LedDriver::HsvToRgb(hsv in) {
++    double hh, p, q, t, ff;
++    long i;
++    rgb out;
++
++    assert((in.s >= 0.0) && (in.s <= 1.0));
++    assert((in.v >= 0.0) && (in.v <= 1.0));
++
++    if (in.s <= 0.0) {
++        out.r = in.v;
++        out.g = in.v;
++        out.b = in.v;
++        return out;
++    }
++
++    hh = in.h;
++    while (hh >= 360.0) {
++        hh -= 360.0;
++    }
++    hh /= 60.0;
++    i = static_cast<long>(hh);
++
++    ff = hh - i;
++    p = in.v * (1.0 - in.s);
++    q = in.v * (1.0 - (in.s * ff));
++    t = in.v * (1.0 - (in.s * (1.0 - ff)));
++
++    switch(i) {
++        case 0:
++            out.r = in.v;
++            out.g = t;
++            out.b = p;
++            break;
++
++        case 1:
++            out.r = q;
++            out.g = in.v;
++            out.b = p;
++            break;
++
++        case 2:
++            out.r = p;
++            out.g = in.v;
++            out.b = t;
++            break;
++
++        case 3:
++            out.r = p;
++            out.g = q;
++            out.b = in.v;
++            break;
++
++        case 4:
++            out.r = t;
++            out.g = p;
++            out.b = in.v;
++            break;
++
++        default:
++            out.r = in.v;
++            out.g = p;
++            out.b = q;
++            break;
++    }
++
++    return out;
++}
+diff -Naur cp_avs-device-sdk/SampleApp/src/main.cpp avs-device-sdk/SampleApp/src/main.cpp
+--- cp_avs-device-sdk/SampleApp/src/main.cpp	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/SampleApp/src/main.cpp	2018-05-30 15:36:16.000000000 -0500
+@@ -18,6 +18,9 @@
+ #include <cstdlib>
+ #include <string>
+ 
++#include "SampleApp/Zle38Avs.h"
++Zle38Avs Zle38AvsBoard;
++
+ /**
+  * Function that evaluates if the SampleApp invocation uses old-style or new-style opt-arg style invocation.
+  *
+diff -Naur cp_avs-device-sdk/SampleApp/src/PortAudioMicrophoneWrapper.cpp avs-device-sdk/SampleApp/src/PortAudioMicrophoneWrapper.cpp
+--- cp_avs-device-sdk/SampleApp/src/PortAudioMicrophoneWrapper.cpp	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/SampleApp/src/PortAudioMicrophoneWrapper.cpp	2018-05-30 15:39:17.000000000 -0500
+@@ -22,13 +22,14 @@
+ #include <AVSCommon/Utils/Logger/Logger.h>
+ #include "SampleApp/PortAudioMicrophoneWrapper.h"
+ #include "SampleApp/ConsolePrinter.h"
++#include "SampleApp/Zle38Avs.h"
+ 
+ namespace alexaClientSDK {
+ namespace sampleApp {
+ 
+ using avsCommon::avs::AudioInputStream;
+ 
+-static const int NUM_INPUT_CHANNELS = 1;
++static const int NUM_INPUT_CHANNELS = 2;
+ static const int NUM_OUTPUT_CHANNELS = 0;
+ static const double SAMPLE_RATE = 16000;
+ static const unsigned long PREFERRED_SAMPLES_PER_CALLBACK = paFramesPerBufferUnspecified;
+@@ -93,7 +94,7 @@
+             &m_paStream,
+             NUM_INPUT_CHANNELS,
+             NUM_OUTPUT_CHANNELS,
+-            paInt16,
++            paInt16 | paNonInterleaved,
+             SAMPLE_RATE,
+             PREFERRED_SAMPLES_PER_CALLBACK,
+             PortAudioCallback,
+@@ -106,7 +107,7 @@
+         std::memset(&inputParameters, 0, sizeof(inputParameters));
+         inputParameters.device = Pa_GetDefaultInputDevice();
+         inputParameters.channelCount = NUM_INPUT_CHANNELS;
+-        inputParameters.sampleFormat = paInt16;
++        inputParameters.sampleFormat = paInt16 | paNonInterleaved;
+         inputParameters.suggestedLatency = suggestedLatency;
+         inputParameters.hostApiSpecificStreamInfo = nullptr;
+ 
+@@ -155,8 +156,13 @@
+     const PaStreamCallbackTimeInfo* timeInfo,
+     PaStreamCallbackFlags statusFlags,
+     void* userData) {
++
++    const int16_t *left = ((int16_t **) inputBuffer)[0];
++    const int16_t *right = ((int16_t **) inputBuffer)[1];
++    Zle38AvsBoard.StoreBuffer(left, numSamples);
++
+     PortAudioMicrophoneWrapper* wrapper = static_cast<PortAudioMicrophoneWrapper*>(userData);
+-    ssize_t returnCode = wrapper->m_writer->write(inputBuffer, numSamples);
++    ssize_t returnCode = wrapper->m_writer->write(right, numSamples);
+     if (returnCode <= 0) {
+         ACSDK_CRITICAL(LX("Failed to write to stream."));
+         return paAbort;
+diff -Naur cp_avs-device-sdk/SampleApp/src/SampleApplication.cpp avs-device-sdk/SampleApp/src/SampleApplication.cpp
+--- cp_avs-device-sdk/SampleApp/src/SampleApplication.cpp	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/SampleApp/src/SampleApplication.cpp	2018-05-30 15:43:43.000000000 -0500
+@@ -631,7 +631,7 @@
+ 
+     // This observer is notified any time a keyword is detected and notifies the DefaultClient to start recognizing.
+     auto keywordObserver =
+-        std::make_shared<alexaClientSDK::sampleApp::KeywordObserver>(client, wakeWordAudioProvider, espProvider);
++        std::make_shared<alexaClientSDK::sampleApp::KeywordObserver>(client, wakeWordAudioProvider, espProvider, espModifier);
+ 
+     m_keywordDetector = alexaClientSDK::kwd::KeywordDetectorProvider::create(
+         sharedDataStream,
+diff -Naur cp_avs-device-sdk/SampleApp/src/UIManager.cpp avs-device-sdk/SampleApp/src/UIManager.cpp
+--- cp_avs-device-sdk/SampleApp/src/UIManager.cpp	2018-05-04 17:45:54.000000000 -0500
++++ avs-device-sdk/SampleApp/src/UIManager.cpp	2018-06-13 15:03:39.000000000 -0500
+@@ -23,6 +23,8 @@
+ 
+ #include "SampleApp/ConsolePrinter.h"
+ 
++#include "SampleApp/Zle38Avs.h"
++
+ namespace alexaClientSDK {
+ namespace sampleApp {
+ 
+@@ -406,20 +408,33 @@
+     if (m_connectionStatus == avsCommon::sdkInterfaces::ConnectionStatusObserverInterface::Status::DISCONNECTED) {
+         ConsolePrinter::prettyPrint("Client not connected!");
+     } else if (m_connectionStatus == avsCommon::sdkInterfaces::ConnectionStatusObserverInterface::Status::PENDING) {
++        Zle38AvsBoard.DialogState(0x10);
+         ConsolePrinter::prettyPrint("Connecting...");
+     } else if (m_connectionStatus == avsCommon::sdkInterfaces::ConnectionStatusObserverInterface::Status::CONNECTED) {
+         switch (m_dialogState) {
+             case DialogUXState::IDLE:
++                Zle38AvsBoard.DialogState(0);
++                Zle38AvsBoard.StopDoa();
++                Zle38AvsBoard.StopSpeaking();
+                 ConsolePrinter::prettyPrint("Alexa is currently idle!");
+                 return;
+             case DialogUXState::LISTENING:
++                Zle38AvsBoard.DialogState(1);
++                Zle38AvsBoard.StopSpeaking();
++                Zle38AvsBoard.StartDoa();
+                 ConsolePrinter::prettyPrint("Listening...");
+                 return;
+             case DialogUXState::THINKING:
++                Zle38AvsBoard.DialogState(2);
++                Zle38AvsBoard.StopDoa();
++                Zle38AvsBoard.StartThinking();
+                 ConsolePrinter::prettyPrint("Thinking...");
+                 return;
+                 ;
+             case DialogUXState::SPEAKING:
++                Zle38AvsBoard.DialogState(3);
++                Zle38AvsBoard.StopThinking();
++                Zle38AvsBoard.StartSpeaking();
+                 ConsolePrinter::prettyPrint("Speaking...");
+                 return;
+             /*
+diff -Naur cp_avs-device-sdk/SampleApp/src/Zle38Avs.cpp avs-device-sdk/SampleApp/src/Zle38Avs.cpp
+--- cp_avs-device-sdk/SampleApp/src/Zle38Avs.cpp	1969-12-31 18:00:00.000000000 -0600
++++ avs-device-sdk/SampleApp/src/Zle38Avs.cpp	2018-06-13 15:29:52.000000000 -0500
+@@ -0,0 +1,527 @@
++/*
++* Zle38Avs.cpp  --  ZLE38AVS board Implementation
++*
++* Copyright 2018 Microsemi Inc. All rights reserved.
++* Licensed under the MIT License. See LICENSE.txt in the project root for license information.
++*/
++
++#include "SampleApp/Zle38Avs.h"
++
++using namespace std;
++
++/*******************************************************************
++ * Constructor
++ * *****************************************************************/
++Zle38Avs::Zle38Avs(unsigned char devAddr) : LedDriver(devAddr) {
++
++    // Dual stream debug
++    this->debug = false;
++
++    // Init the HBI driver
++    this->Zle38AvsHbiSetup();
++
++    // Init the LED ring (if any)
++    if (LedDriver::ledDriverOpen) {
++        this->Zle38AvsRingSetup();
++    }
++
++    // Init the Sensory audio buffer
++    this->sensoryCircBuffer.reserve(this->S_BUFF_SIZE);
++    this->writeIndex = 0;
++    this->readIndex = 0;
++    if (this->debug) {
++        this->sdsFile.open("/home/pi/ZLK38AVS/cloudFile.raw", ios::binary | ios::trunc);
++        this->bypFile.open("/home/pi/ZLK38AVS/sensoryFile.raw", ios::binary | ios::trunc);
++    }
++}
++
++/**********************************************************************
++ * Destructor
++ * *********************************************************************/
++Zle38Avs::~Zle38Avs(void) {
++
++    if (LedDriver::ledDriverOpen) {
++        // Display the empty frame 2 to turn off the LEDs
++        LedDriver::DisplayFrame(2);
++    }
++
++    // Close Vproc driver
++    HBI_close(this->hbiHandle);
++
++    if (this->debug) {
++        this->sdsFile.close();
++        this->bypFile.close();
++    }
++}
++
++/**********************************************************************
++ * Ring setup
++ * *********************************************************************/
++void Zle38Avs::Zle38AvsRingSetup(void) {
++
++    /*******************************/
++    /* Setup the "thinking" frames */
++    /* Frames 3, 4, 5              */
++    /*******************************/
++    unsigned char pattern[] = {0, 0, 1};
++    rgb color, darkColor, lightColor;
++
++    // Alternate the two blue with the same intensity
++    darkColor = HsvToRgb(this->BG_BLUE, 1, this->FADE_BLUE_V);
++    lightColor = HsvToRgb(this->FG_BLUE, 1, this->FADE_BLUE_V);
++
++    // Set frames 3, 4, 5
++    // Shift the LEDs by 1 from ring to ring
++    for (unsigned char i = 0; i < 3; i++) {
++        LedDriver::SelectFrame(3 + i);
++
++        for (unsigned char j = 0; j < this->NB_LEDS; j++) {
++            if (pattern[(i + j) % 3] == 0) {
++                color = darkColor;
++            } else {
++                color = lightColor;
++            }
++
++            // Set the color
++            LedDriver::ControlPwm(this->LED_MAP_ARR[j][0], static_cast<unsigned char>(color.r * 63));
++            LedDriver::ControlPwm(this->LED_MAP_ARR[j][1], static_cast<unsigned char>(color.g * 63));
++            LedDriver::ControlPwm(this->LED_MAP_ARR[j][2], static_cast<unsigned char>(color.b * 63));
++
++            // Turn the LEDs on
++            LedDriver::ControlLed(this->LED_MAP_ARR[j][0], 1);
++            LedDriver::ControlLed(this->LED_MAP_ARR[j][1], 1);
++            LedDriver::ControlLed(this->LED_MAP_ARR[j][2], 1);
++        }
++    }
++
++    /******************************/
++    /* Setup the "speaking" frame */
++    /* Frame 6                    */
++    /******************************/
++    color = HsvToRgb(this->BG_BLUE, 1, FADE_BLUE_V);
++
++    LedDriver::SelectFrame(6);
++
++    for (unsigned char i = 0; i < this->NB_LEDS; i++) {
++        // Set the color
++        LedDriver::ControlPwm(this->LED_MAP_ARR[i][0], static_cast<unsigned char>(color.r * 63));
++        LedDriver::ControlPwm(this->LED_MAP_ARR[i][1], static_cast<unsigned char>(color.g * 63));
++        LedDriver::ControlPwm(this->LED_MAP_ARR[i][2], static_cast<unsigned char>(color.b * 63));
++
++        // Turn the LEDs on
++        LedDriver::ControlLed(this->LED_MAP_ARR[i][0], 1);
++        LedDriver::ControlLed(this->LED_MAP_ARR[i][1], 1);
++        LedDriver::ControlLed(this->LED_MAP_ARR[i][2], 1);
++    }
++
++    /***************************************/
++    /* Setup the non-DOA (1, 2 mics) frame */
++    /* Frame 7                             */
++    /***************************************/
++    bool light = false;
++
++    // Alternate the two blue to point to all directions
++    lightColor = HsvToRgb(this->FG_BLUE, 1, this->FG_BLUE_V);
++    darkColor = HsvToRgb(this->FADE_BLUE, 1, this->FADE_BLUE_V);
++
++    LedDriver::SelectFrame(7);
++
++    for (unsigned char i = 0; i < this->NB_LEDS; i++) {
++        if (light) {
++            color = lightColor;
++        } else {
++            color = darkColor;
++        }
++        light ^= true;
++
++        // Set the color
++        LedDriver::ControlPwm(this->LED_MAP_ARR[i][0], static_cast<unsigned char>(color.r * 63));
++        LedDriver::ControlPwm(this->LED_MAP_ARR[i][1], static_cast<unsigned char>(color.g * 63));
++        LedDriver::ControlPwm(this->LED_MAP_ARR[i][2], static_cast<unsigned char>(color.b * 63));
++
++        // Turn the LEDs on
++        LedDriver::ControlLed(this->LED_MAP_ARR[i][0], 1);
++        LedDriver::ControlLed(this->LED_MAP_ARR[i][1], 1);
++        LedDriver::ControlLed(this->LED_MAP_ARR[i][2], 1);
++    }
++
++    this->doaRunning = false;
++}
++
++/**********************************************************************
++ * Vproc SDK setup
++ * ********************************************************************/
++int Zle38Avs::Zle38AvsHbiSetup(void) {
++    hbi_status_t status;
++    hbi_dev_cfg_t devConfig;
++    user_buffer_t buf[2];
++
++    devConfig.deviceId = 0;
++    devConfig.pDevName = NULL;
++
++    status = HBI_open(&this->hbiHandle, &devConfig);
++    if(status != HBI_STATUS_SUCCESS) {
++        printf("Error - Main(): HBI_open failed (%d)\n", status);
++        return -1;
++    }
++
++    // Set Timberwolf GPIO8 to output
++    // Disable fixed function
++    HBI_read(this->hbiHandle, 0x2D8, buf, 2);
++    buf[0] &= ~0x01;
++    HBI_write(this->hbiHandle, 0x2D8, buf, 2);
++    // Soft reset
++    buf[0] = 0x00;
++    buf[1] = 0x01;
++    HBI_write(this->hbiHandle, 0x006, buf, 2);
++
++    //Clear GPIO8
++    HBI_read(this->hbiHandle, 0x2DA, buf, 2);
++    buf[0] &= ~0x01;
++    HBI_write(this->hbiHandle, 0x2DA, buf, 2);
++
++    //Set GPIO8 as output
++    HBI_read(this->hbiHandle, 0x2DC, buf, 2);
++    buf[0] |= 0x01;
++    HBI_write(this->hbiHandle, 0x2DC, buf, 2);
++
++    // Set the intial ASR state as "Connecting"
++    buf[0] = 0x00;
++    buf[1] = 0x10;
++    HBI_write(this->hbiHandle, 0x4A4, buf, 2);
++
++    return 0;
++}
++
++/**********************************************************************
++ * Display the sound location on the LED ring
++ * angle: 0 -> 359
++ * ********************************************************************/
++void Zle38Avs::SetDoaFrame(unsigned short angle, rgb fg, rgb fade, rgb bg) {
++    unsigned char ledIndex, ledTail1, ledTail2;
++    unsigned short resolution = 360 / this->NB_LEDS;
++    rgb color;
++    static unsigned char lastFrame = 0;
++
++    assert(angle < 360);
++
++    // Get the LED index corresponding to the angle rounded to the closest
++    ledIndex = static_cast<unsigned char>(((angle + resolution / 2) / resolution) % this->NB_LEDS);
++    ledTail1 = (ledIndex + 1) % this->NB_LEDS;
++    ledTail2 = (ledIndex + this->NB_LEDS - 1) % this->NB_LEDS;
++
++    // Alternate the frames (0, 1) to prevent twinkle
++    lastFrame ^= 1;
++    LedDriver::SelectFrame(lastFrame);
++
++    for (unsigned char i = 0; i < this->NB_LEDS; i++) {
++        if (i == ledIndex) {
++            // Direction indication
++            color = fg;
++        } else if ((i == ledTail1) || (i == ledTail2)) {
++            // Faded tail
++            color = fade;
++        } else {
++            // Background color
++            color = bg;
++        }
++
++        // Configure the colors
++        LedDriver::ControlPwm(this->LED_MAP_ARR[i][0], static_cast<unsigned char>(color.r * 63));
++        LedDriver::ControlPwm(this->LED_MAP_ARR[i][1], static_cast<unsigned char>(color.g * 63));
++        LedDriver::ControlPwm(this->LED_MAP_ARR[i][2], static_cast<unsigned char>(color.b * 63));
++    }
++
++    // Display the newly programmed frame
++    LedDriver::DisplayFrame(lastFrame);
++}
++
++/**********************************************************************
++ * Should run in a thread
++ * Init the LEDs and display the DOA read from the Timberwolf
++ * ********************************************************************/
++void Zle38Avs::Doa(void) {
++    rgb fg, fade, bg;
++    user_buffer_t buf[4];
++    unsigned short angle, backAngle = 1000;
++    unsigned long squarePower;
++    double soutPower;
++
++    // Enable the LEDs on the two first frames (0, 1)
++    for (unsigned char i = 0; i < 2; i++) {
++        LedDriver::SelectFrame(i);
++
++        for (unsigned char j = 0; j < this->NB_LEDS; j++) {
++            LedDriver::ControlLed(this->LED_MAP_ARR[j][0], 1);
++            LedDriver::ControlLed(this->LED_MAP_ARR[j][1], 1);
++            LedDriver::ControlLed(this->LED_MAP_ARR[j][2], 1);
++        }
++    }
++
++    fg = HsvToRgb(this->FG_BLUE, 1, this->FG_BLUE_V);
++    fade = HsvToRgb(this->FADE_BLUE, 1, this->FADE_BLUE_V);
++    bg = HsvToRgb(this->BG_BLUE, 1, this->BG_BLUE_V);
++
++    // Init the power meter 2 (Sout, 32ms)
++    buf[0] = 0x00;
++    buf[1] = 0x17;
++    HBI_write(this->hbiHandle, 0xE20, buf, 2);
++    buf[0] = 0x00;
++    buf[1] = 0x0B;
++    HBI_write(this->hbiHandle, 0xE22, buf, 2);
++
++    while (this->doaRunning) {
++        // Read the number of mics and configuration
++        // DOA is only available in 3 mics triangular
++        // Allow for a firmware swap in the middle of the DOA
++        HBI_read(this->hbiHandle, 0x4C0, buf, 2);
++
++        if ((buf[1] & 0x13) == 0x13) {
++            // Read the DOA from Timberwolf
++            HBI_read(this->hbiHandle, 0x0A0, buf, 2);
++            angle = (buf[0] << 8) + buf[1];
++
++            // Read the Sout power (32b)
++            HBI_read(this->hbiHandle, 0xEA0, buf, 4);
++            squarePower = (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3];
++
++            // Reset the power meter
++            buf[0] = 0;
++            buf[1] = 0;
++            buf[2] = 0;
++            buf[3] = 0;
++            HBI_write(this->hbiHandle, 0xEA0, buf, 4);
++
++            if (squarePower > 0) {
++                soutPower = 10 * log10(squarePower) - 10 * log10(pow(2, 30));
++            } else {
++                soutPower = - 90;
++            }
++
++            // Only update the DOA if the source moved and the sound level is high enough
++            // Use "backAngle == 1000" as a marker to identify the first iteration
++            if ((soutPower > this->MIN_POWER_DB) || (backAngle == 1000)){
++                if (abs(angle - backAngle) > 15) {
++                    backAngle = angle;
++                    this->SetDoaFrame(angle, fg, fade, bg);
++                } else {
++                    this_thread::sleep_for (chrono::milliseconds(32));
++                }
++            } else {
++                this_thread::sleep_for (chrono::milliseconds(32));
++            }
++        } else {
++            LedDriver::DisplayFrame(7);
++            this_thread::sleep_for (chrono::milliseconds(30));
++        }
++    }
++
++    // Display the empty frame 2 to turn off the LEDs
++    LedDriver::DisplayFrame(2);
++}
++
++/**********************************************************************
++ * Start the DOA
++ * ********************************************************************/
++void Zle38Avs::StartDoa(void) {
++    user_buffer_t buf[2];
++
++    if (LedDriver::ledDriverOpen) {
++        this->doaRunning = true;
++        this->doaThread = thread(&Zle38Avs::Doa, this);
++    } else {
++        // Turn on the LED (GPIO 8)
++        HBI_read(this->hbiHandle, 0x2DA, buf, 2);
++        buf[0] |= 0x01;
++        HBI_write(this->hbiHandle, 0x2DA, buf, 2);
++    }
++}
++
++/**********************************************************************
++ * Stop the DOA
++ * ********************************************************************/
++void Zle38Avs::StopDoa(void) {
++    user_buffer_t buf[2];
++
++    if (LedDriver::ledDriverOpen) {
++        if (this->doaRunning) {
++            // Wait for the thread to finish before exiting
++            this->doaRunning = false;
++            this->doaThread.join();
++        }
++    } else {
++        // Turn off the LED (GPIO 8)
++        HBI_read(this->hbiHandle, 0x2DA, buf, 2);
++        buf[0] &= ~0x01;
++        HBI_write(this->hbiHandle, 0x2DA, buf, 2);
++    }
++}
++
++/**********************************************************************
++ * Display the "thinking" ring
++ * ********************************************************************/
++void Zle38Avs::StartThinking(void) {
++
++    if (LedDriver::ledDriverOpen) {
++        // Configure the autoplay (endless, 3 frames changing every 99ms)
++        LedDriver::SetAutoPlay(0, 3, 9);
++
++        // Start the pattern
++        LedDriver::SetMode(IS31::AUTOPLAY_MODE, 3);
++    }
++}
++
++/**********************************************************************
++ * Stop the "thinking" ring
++ * ********************************************************************/
++void Zle38Avs::StopThinking(void) {
++
++    if (LedDriver::ledDriverOpen) {
++        // Go back to default "picture mode"
++        LedDriver::SetMode(IS31::PICTURE_MODE);
++
++        // Display the empty frame 2 to turn off the LEDs
++        LedDriver::DisplayFrame(2);
++    }
++}
++
++/**********************************************************************
++ * Display the "speaking" ring
++ * ********************************************************************/
++void Zle38Avs::StartSpeaking(void) {
++
++    if (LedDriver::ledDriverOpen) {
++        // Configure the autoplay (enabled, 416ms fade in-out)
++        LedDriver::SetBreathControl(1, 4, 4, 0);
++        LedDriver::SetAutoPlay(0, 1, 0);
++
++        // Start breathing
++        LedDriver::SetMode(IS31::AUTOPLAY_MODE, 6);
++    }
++}
++
++/**********************************************************************
++ * Stop the "speaking" ring
++ * ********************************************************************/
++void Zle38Avs::StopSpeaking(void) {
++
++    if (LedDriver::ledDriverOpen) {
++        // Stop breathing
++        LedDriver::SetBreathControl(0, 0, 0, 0);
++
++        // Go back to default "picture mode"
++        LedDriver::SetMode(IS31::PICTURE_MODE);
++
++        // Display the empty frame 2 to turn off the LEDs
++        LedDriver::DisplayFrame(2);
++    }
++}
++
++/**********************************************************************
++ * Store an audio buffer in the larger circular buffer (1 sample = 2 bytes)
++ * ********************************************************************/
++void Zle38Avs::StoreBuffer(const int16_t *buff, unsigned short numSamples) {
++    unsigned short numBytes = numSamples * 2;
++    unsigned short tempSizeSamples;
++
++    // Lock the access to sensoryCircBuffer[]
++    this->mtx.lock();
++
++    if ((this->writeIndex + numSamples) <= this->S_BUFF_SIZE) {
++        memcpy(this->sensoryCircBuffer.data() + this->writeIndex, buff, numBytes);
++        this->writeIndex += numSamples;
++    } else {
++        // Loop to get the full number of requested bytes
++        tempSizeSamples = this->S_BUFF_SIZE - this->writeIndex;
++        memcpy(this->sensoryCircBuffer.data() + this->writeIndex, buff, tempSizeSamples * 2);
++        this->writeIndex = 0;
++        memcpy(this->sensoryCircBuffer.data() + this->writeIndex, buff + tempSizeSamples, numBytes - tempSizeSamples * 2);
++        this->writeIndex += numSamples - tempSizeSamples;
++    }
++
++    // Free the access to sensoryCircBuffer[]
++    this->mtx.unlock();
++}
++
++/**********************************************************************
++ * Return an audio buffer from the larger circular buffer (1 sample = 2 bytes)
++ * ********************************************************************/
++void Zle38Avs::GetBuffer(int16_t *buff, unsigned short numSamples) {
++    unsigned short numBytes = numSamples * 2;
++    unsigned short tempSizeSamples;
++
++    if (this->debug) {
++        this->sdsFile.write((char *)buff, numBytes);
++    }
++
++    // Lock the access to sensoryCircBuffer[]
++    this->mtx.lock();
++
++    if ((this->readIndex + numSamples) <= this->S_BUFF_SIZE) {
++        memcpy(buff, this->sensoryCircBuffer.data() + this->readIndex, numBytes);
++        this->readIndex += numSamples;
++    } else {
++        // Loop to get the full number of requested bytes
++        tempSizeSamples = this->S_BUFF_SIZE - this->readIndex;
++        memcpy(buff, this->sensoryCircBuffer.data() + this->readIndex, tempSizeSamples * 2);
++        this->readIndex = 0;
++        memcpy(buff + tempSizeSamples, this->sensoryCircBuffer.data() + this->readIndex, numBytes - tempSizeSamples * 2);
++        this->readIndex += numSamples - tempSizeSamples;
++    }
++
++    // Free the access to sensoryCircBuffer[]
++    this->mtx.unlock();
++
++    if (this->debug) {
++        this->bypFile.write((char *)buff, numBytes);
++    }
++}
++
++/**********************************************************************
++ * Communicate the detection state to Timberwolf
++ * ********************************************************************/
++void Zle38Avs::DialogState(unsigned char state) {
++    user_buffer_t buf[2];
++
++    buf[0] = 0x00;
++    if ((state > 3) && (state != 0x10)) {
++        buf[1] = 0;
++        cerr << "Zle38Avs::DialogState(): unknown state " << state << endl;
++    } else {
++        buf[1] = state;
++    }
++    HBI_write(this->hbiHandle, 0x4A4, buf, 2);
++}
++
++/**********************************************************************
++ * Read the ESP registers
++ * ********************************************************************/
++void Zle38Avs::ReadESP(unsigned long *vEnergy, unsigned long *aEnergy) {
++    user_buffer_t buf[4];
++    unsigned long voiceEnergy, ambientEnergy;
++
++    // Set the fetch register to update ESP registers
++    buf[1] = 0x00;
++    buf[0] = 0x01;
++    HBI_write(this->hbiHandle, 0xA00, buf, 2);
++
++    // Read the voice energy value (32b)
++    HBI_read(this->hbiHandle, 0xA08, buf, 4);
++    voiceEnergy = (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3];
++
++    // Read the ambient energy value (32b)
++    HBI_read(this->hbiHandle, 0xA0C, buf, 4);
++    ambientEnergy = (buf[0] << 24) + (buf[1] << 16) + (buf[2] << 8) + buf[3];
++
++    // Clear the fetch register to indicate done reading
++    buf[1] = 0x00;
++    buf[0] = 0x00;
++    HBI_write(this->hbiHandle, 0xA00, buf, 2);
++
++    // Print the energy values to the console
++    // printf("Voice Energy: 0x%08lX\n", voiceEnergy);
++    // printf("Ambient Energy: 0x%08lX\n", ambientEnergy);
++
++    *vEnergy = voiceEnergy;
++    *aEnergy = ambientEnergy;
++}
+\ No newline at end of file

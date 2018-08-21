@@ -1,5 +1,10 @@
 #!/usr/bin/env python
 
+# hbi_load_firmware.py  --  Python 2.7 script to manage Timberwolf firmwares and configurations
+
+# Copyright 2018 Microsemi Inc. All rights reserved.
+#Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+
 # Functions designed for programmatic interface:
 # IsFirmwareRunning(handle)
 #     Returns 0x8000 (essentially True) if the firmware is running, 0 otherwise
@@ -99,7 +104,7 @@ def StopFirmware(handle):
             raise ValueError("Error - StopFirmware(): Timeout in StopFirmware")
 
     if not programmatic:
-        print "Info - Firmware stopped"
+        print("Info - Firmware stopped")
 
 # ****************************************************************************
 def StartFirmware(handle, skip_error = False):
@@ -113,11 +118,11 @@ def StartFirmware(handle, skip_error = False):
     if not IsFirmwareRunning(handle):
         if skip_error:
             if not programmatic:
-                print "Warning - Firmware stopped"
+                print("Warning - Firmware stopped")
         else:
             raise ValueError("Error - StartFirmware(): Firmware cannot start")
     elif not programmatic:
-        print "Info - Firmware started"
+        print("Info - Firmware started")
 
 # ****************************************************************************
 def InitFlash(handle, skip_error = False):
@@ -137,7 +142,7 @@ def InitFlash(handle, skip_error = False):
     if (status != 0):
         if skip_error:
             if not programmatic:
-                print "Info - No flash detected"
+                print("Info - No flash detected")
         else:
             raise ValueError("Error - InitFlash(): Cannot initialize the flash (0x%X)" % status)
 
@@ -163,7 +168,7 @@ def EraseFlash(handle):
         raise ValueError("Error - EraseFlash(): Cannot erase the flash (0x%X)" % status)
 
     if not programmatic:
-        print "Info - Flash erase completed"
+        print("Info - Flash erase completed")
 
 # ****************************************************************************
 def LoadFirmwareFromFlash(handle, firmware_index):
@@ -185,7 +190,7 @@ def LoadFirmwareFromFlash(handle, firmware_index):
         raise ValueError("Error - LoadFirmwareFromFlash(): Cannot load the firmware %d from flash (%d)" % (firmware_index, status))
 
     elif not programmatic:
-        print ("Info - Firmware and configuration from slot %d were successfully loaded" % firmware_index)
+        print("Info - Firmware and configuration from slot %d were successfully loaded" % firmware_index)
 
 # ****************************************************************************
 def LoadFirmware(handle, firmware_buf):
@@ -213,12 +218,11 @@ def LoadFirmware(handle, firmware_buf):
 
     # Send the firmware "block_size" at a time
     image_len = header.img_len
-    block_num = image_len / block_size
+    block_num = image_len // block_size
     if ((image_len % block_size) != 0):
         raise ValueError("Error - LoadFirmware(): The firmware size is not a multiple of block_size")
 
-
-    for i in xrange(0, block_num):
+    for i in range(0, block_num):
         offset = i * block_size
         data.pData = firmware_buf[offset : offset + block_size]
         data.size = block_size
@@ -231,7 +235,7 @@ def LoadFirmware(handle, firmware_buf):
         raise ValueError("Error - LoadFirmware(): Firmware final loading issue (%d)" % status)
 
     if not programmatic:
-        print ("Info - Firmware successfully loaded")
+        print("Info - Firmware successfully loaded")
 
 # ****************************************************************************
 def LoadConfigCr2(handle, config_record_buf):
@@ -271,7 +275,7 @@ def LoadConfigCr2(handle, config_record_buf):
                 prev_addr = 0
 
     if not programmatic:
-        print ("Info - Configuration record successfully loaded")
+        print("Info - Configuration record successfully loaded")
 
 # ****************************************************************************
 def SaveFirmwareToFlash(handle):
@@ -294,7 +298,7 @@ def SaveFirmwareToFlash(handle):
     slot = FormatNumber(HBI_read(handle, 0x026, 2))
 
     if not programmatic:
-        print ("Info - Firmware and configuration saved to flash slot %d" % slot)
+        print("Info - Firmware and configuration saved to flash slot %d" % slot)
 
     return slot
 
@@ -307,6 +311,8 @@ def SaveConfigToFlash(handle, flash_slot = 1):
         HBI_write(handle, 0x032, (0x80, 0x02))
         HBI_write(handle, 0x034, (0x00, flash_slot))
         HBI_write(handle, 0x006, (0x00, 0x04))
+        # An extra delay is required after a software semaphore flag and before BusySpinWait()
+        time.sleep(0.01)
     else:
         # Must set the config record checksum to 0 before saving to flash (bootrom will recompute)
         HBI_write(handle, 0x01F2, (0x00, 0x00))
@@ -323,7 +329,7 @@ def SaveConfigToFlash(handle, flash_slot = 1):
         raise ValueError("Error - SaveConfigToFlash(): Cannot save the configuration to flash (0x%X)" % status)
 
     if not programmatic:
-        print ("Info - Configuration saved to flash slot %d" % args.indexSlot)
+        print("Info - Configuration saved to flash slot %d" % args.indexSlot)
 
 # ****************************************************************************
 def ParseBinFile(path):
@@ -400,10 +406,9 @@ ex: Load a firmware and configuration from flash slot 3:
 
     # Init the HBI driver
     cfg = hbi_dev_cfg_t();
-    cfg.dev_addr = args.chipSelect
-    HBI_init(None)
+    cfg.deviceId = args.chipSelect
     handle = HBI_open(cfg)
-    print ("Info - Device open on SPI CS%d" % args.chipSelect)
+    print("Info - Device open on SPI CS%d" % args.chipSelect)
 
     try:
         # Check if the firmware is stopped
@@ -455,8 +460,7 @@ ex: Load a firmware and configuration from flash slot 3:
             StartFirmware(handle, True)
 
     except ValueError as err:
-        print err
+        print(err)
 
     # Close HBI driver
     HBI_close(handle)
-    HBI_term()

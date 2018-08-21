@@ -1,6 +1,11 @@
 #!/usr/bin/env python
+
+# MiTuner_socket_server.py  --  Python 2.7 socket server to be used with MiTuner Bridge
+
+# Copyright 2018 Microsemi Inc. All rights reserved.
+#Licensed under the MIT License. See LICENSE.txt in the project root for license information.
+
 from os.path import dirname, realpath, isfile
-from itertools import izip
 import argparse
 import sys
 import struct
@@ -37,9 +42,9 @@ def SpiBufferRead(handle, address, numBytes):
 # ****************************************************************************
 def SpiBufferWrite(handle, address, bufferString):
     byteList = []
-    nbBytes = len(bufferString) / 2
+    nbBytes = len(bufferString) // 2
 
-    for i in xrange(nbBytes):
+    for i in range(nbBytes):
         byteList.append(int(bufferString[i * 2: i * 2 + 2], 16))
 
     HBI_write(handle, address, byteList)
@@ -81,7 +86,7 @@ def FirmwareLoading(handle, type, cmd):
             LoadFirmware(handle, fwBin)
 
         except ValueError as err:
-            print err
+            print(err)
             return "ERROR"
 
     return "OK"
@@ -93,7 +98,7 @@ def EraseSpiFlash(handle):
         EraseFlash(handle)
 
     except ValueError as err:
-        print err
+        print(err)
         return "ERROR"
 
     return "OK"
@@ -106,7 +111,7 @@ def SaveFirmware2Flash(handle):
         SaveFirmwareToFlash(handle)
 
     except ValueError as err:
-        print err
+        print(err)
         return "ERROR"
 
     return "OK"
@@ -121,7 +126,7 @@ def SaveConfig2Flash(handle, index):
         SaveConfigToFlash(handle, index)
 
     except ValueError as err:
-        print err
+        print(err)
         return "ERROR"
 
     return "OK"
@@ -134,7 +139,7 @@ def LoadFwfromFlash(handle, index):
         LoadFirmwareFromFlash(handle, index)
 
     except ValueError as err:
-        print err
+        print(err)
         return "ERROR"
 
     return "OK"
@@ -184,7 +189,6 @@ if __name__ == "__main__":
 
     # Init the HBI driver
     cfg = hbi_dev_cfg_t();
-    HBI_init(None)
     handle = HBI_open(cfg)
 
     try:
@@ -194,17 +198,17 @@ if __name__ == "__main__":
         s.listen(1)
 
         # Accept connections from outside
-        print "Socket created on port %d, waiting for a connection" % PORT
+        print("Socket created on port %d, waiting for a connection" % PORT)
         while True:
             clientsocket, address = s.accept()
-            print "Incoming connection from: %s" % address[0]
+            print("Incoming connection from: %s" % address[0])
 
             message = ""
             waitType = "header"
             while True:
-                buff = clientsocket.recv(BUFFER_SZ)
+                buff = clientsocket.recv(BUFFER_SZ).decode()
                 if (buff == ""):
-                    print "Connection closed by the client (%s)" % address[0]
+                    print("Connection closed by the client (%s)" % address[0])
                     break
                 else:
                     message += buff
@@ -218,22 +222,20 @@ if __name__ == "__main__":
                         cmd = message[0: cmdLen]
                         message = message[cmdLen:]
                         if (args.debug & 1):
-                            print "header = %s, cmd = %s" % (header, cmd)
+                            print("header = %s, cmd = %s" % (header, cmd))
                         answer = ParseCmd(handle, header, cmd)
                         if (args.debug & 2):
-                            print "\t" + answer
-                        clientsocket.send(answer)
+                            print("\t" + answer)
+                        clientsocket.send(answer.encode())
                         waitType = "header"
 
             clientsocket.close()
 
     except:
-        print "Server shut down"
+        print("Server shut down")
 
     # Close the Socket
     s.close()
 
     # Close HBI driver
     HBI_close(handle)
-    HBI_term()
-

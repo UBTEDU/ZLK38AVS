@@ -10,9 +10,7 @@
 
 #if (TARGET == TW)
 #include "zl380xx_tw.h"
-#if (CHIP == 38051)
 #include "zl38051.h"
-#endif
 #endif
 
 #endif

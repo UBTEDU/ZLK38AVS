@@ -49,7 +49,6 @@ struct hbi_drv_priv
 };
 
 static struct hbi_drv_priv hbi_priv;
-
    
 #define CHK_IF_INITED(val)  \
    if( val != TRUE){ \
@@ -103,7 +102,7 @@ hbi_status_t HBI_init(hbi_init_cfg_t *pCfg)
 
    hbi_priv.bInitialized = TRUE;
    hbi_priv.init_count++;
-
+   VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,"HBI initialized %d, opened count %d\n", hbi_priv.bInitialized, hbi_priv.init_count);
    return status;
 }
 
@@ -119,7 +118,13 @@ hbi_status_t HBI_open(hbi_handle_t *pHandle, hbi_dev_cfg_t *pDevCfg)
     uint8_t              dev_index;
     
     VPROC_DBG_PRINT(VPROC_DBG_LVL_FUNC,"Enter ...\n");
-
+#ifdef INIT_TERM_AUTO    
+    status = HBI_init(NULL);
+    if (status != HBI_STATUS_SUCCESS)
+    {
+        return status;
+    }
+#endif
     CHK_IF_INITED(hbi_priv.bInitialized);
     CHK_NULL_ARG(pHandle);
     CHK_NULL_ARG(pDevCfg);
@@ -149,7 +154,7 @@ hbi_status_t HBI_open(hbi_handle_t *pHandle, hbi_dev_cfg_t *pDevCfg)
     /* check if unit already opened */
     for(i=0;i<VPROC_MAX_NUM_DEVS;i++)
     {
-        if((hbi_priv.dev_list[i].dev_cfg.dev_addr == pDevCfg->dev_addr) && 
+        if((hbi_priv.dev_list[i].dev_cfg.deviceId == pDevCfg->deviceId) && 
            (hbi_priv.dev_list[i].port_handle != (ssl_port_handle_t)NULL))
         {
             VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,"Unit already opened\n");
@@ -199,6 +204,7 @@ hbi_status_t HBI_open(hbi_handle_t *pHandle, hbi_dev_cfg_t *pDevCfg)
 
         ssl_devcfg.bus_num = pDevCfg->bus_num;
         ssl_devcfg.dev_addr = pDevCfg->dev_addr;
+        ssl_devcfg.deviceId = pDevCfg->deviceId;
         
         if(pDevCfg->pDevName != NULL)
         {
@@ -303,7 +309,14 @@ hbi_status_t HBI_close(hbi_handle_t handle)
     hbi_priv.num_instances--;
 
     HBI_UNLOCK(hbi_priv.cfg.lock);
-
+#ifdef INIT_TERM_AUTO
+    status = HBI_term();
+    if(status != HBI_STATUS_SUCCESS)
+    {
+        VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR, "driver term error\n");
+        return status;
+    }
+#endif
     return status;
 }
 
@@ -346,7 +359,7 @@ hbi_status_t HBI_term(void)
    return HBI_STATUS_SUCCESS;
 }
 
-hbi_status_t HBI_read(hbi_handle_t handle, reg_addr_t reg, user_buffer_t *pData, 
+hbi_status_t HBI_read(hbi_handle_t handle, reg_addr_t reg, user_buffer_t *pOutput, 
                     size_t length)
 {
    hbi_handle_t inst_index = handle;
@@ -354,19 +367,19 @@ hbi_status_t HBI_read(hbi_handle_t handle, reg_addr_t reg, user_buffer_t *pData,
    hbi_status_t status;
 
    CHK_IF_INITED(hbi_priv.bInitialized);
-   CHK_NULL_ARG(pData);
+   CHK_NULL_ARG(pOutput);
    CHK_VALID_HANDLE(inst_index);
    
    HBI_LOCK(hbi_priv.cfg.lock,SSL_WAIT_FOREVER);
    pDev = hbi_priv.inst_list[inst_index].pDev;
    HBI_UNLOCK(hbi_priv.cfg.lock);
 
-   status = internal_hbi_read(pDev,reg,pData,length);
+   status = internal_hbi_read(pDev,reg,pOutput,length);
 
    return status;
 }
 
-hbi_status_t HBI_write(hbi_handle_t handle, reg_addr_t reg, user_buffer_t *pData, 
+hbi_status_t HBI_write(hbi_handle_t handle, reg_addr_t reg, user_buffer_t *pInput, 
                         size_t length)
 {
    hbi_status_t status = HBI_STATUS_SUCCESS;
@@ -374,14 +387,14 @@ hbi_status_t HBI_write(hbi_handle_t handle, reg_addr_t reg, user_buffer_t *pData
    struct vproc_dev *pDev;
 
    CHK_IF_INITED(hbi_priv.bInitialized);
-   CHK_NULL_ARG(pData);
+   CHK_NULL_ARG(pInput);
    CHK_VALID_HANDLE(inst_index);
 
    HBI_LOCK(hbi_priv.cfg.lock,SSL_WAIT_FOREVER);
    pDev = hbi_priv.inst_list[inst_index].pDev;
    HBI_UNLOCK(hbi_priv.cfg.lock);
 
-   status = internal_hbi_write(pDev,reg,pData,length);
+   status = internal_hbi_write(pDev,reg,pInput,length);
 
    return status;
 }
@@ -468,3 +481,4 @@ hbi_status_t HBI_get_header(hbi_data_t *pImg, hbi_img_hdr_t *pHdr)
    status = internal_hbi_get_hdr(pImg,pHdr);
    return status;
 }
+

@@ -79,6 +79,19 @@ typedef enum
 }ssl_status_t;
 
 
+typedef struct 
+{
+    uint16_t chip; /*!< CHIP name EX: 38051*/
+    uint8_t  dev_addr; /*!< device address. can be i2c address or spi chip 
+                          select id*/
+    uint8_t  bus_num;  /*!< bus number device physically present on */
+    uint8_t  isboot;   /*TRUE to boot load images into the device at power up, FALSE not to boot load the device*/
+    uint8_t  *pFirmware; /*a pointer to either the filename if in *.bin format or data array  if in c code format*/
+    uint8_t  *pConfig;   /*a pointer to either the filename if in *.cr2 format or data array  if in c code format*/
+    ssl_lock_handle_t dev_lock; /*!< lock to serialise device access */
+    uint8_t  imageType;   /*0: for static *.h, *.c code, 1: for *.bin */
+}ssl_dev_info_t;
+
 /*! \enum ssl_wait_t  
  *  \brief Enumerates wait type on lock. 
  *   
@@ -133,6 +146,18 @@ typedef struct
                       */
 }ssl_port_access_t;
 
+extern ssl_dev_info_t sdk_devices_info[VPROC_MAX_NUM_DEVS];
+
+/*! \fn  ssl_status_t sdk_register_board_devices_info(ssl_dev_info_t *pDevicesInfo)
+ *
+ * \brief device Driver initialization function.
+ *
+ * initialize of device resources as required by driver is performed by this funtion 
+ *
+ * @param [in] pDevicesInfo    Pointer to driver init ressource configuration. 
+*/
+ssl_status_t sdk_register_board_devices_info(ssl_dev_info_t *pDevicesInfo);
+int ssl_get_device_id(ssl_dev_cfg_t *pDevCfg);
 /*! \fn  ssl_status_t SSL_init(ssl_drv_cfg_t *pCfg)
  *
  * \brief Driver initialization function.

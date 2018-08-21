@@ -25,8 +25,9 @@
 #define HOST_CMD_CMD_IN_PROGRESS               0xFFFF  /*wait command is in progress */
 #define TOTAL_FWR_DATA_WORD_PER_LINE           24
 #define TOTAL_FWR_DATA_BYTE_PER_LINE           128
-#define TWOLF_MBCMDREG_SPINWAIT                 10000
-#define ZL380xx_RESET_IN_PROGRESS               0x0001
+#define TWOLF_MBCMDREG_SPINWAIT                10000
+#define ZL380xx_RESET_IN_PROGRESS              0x0001
+#define MAX_HBI_BYTES_PER_ACCESS               256
 /* The same driver write function is used for both writing to register
  * and also to load the firmware and config into the device
  * key to differentiate between the actual command and the data
@@ -35,21 +36,21 @@
 #define HBI_ACCESS_TYPE_LOAD_FWR 3 /*to specify that the access is to load firmware*/
 
 #define HBI_PAGED_READ(offset,length) \
-    ((u16)(((u16)(offset) << 8) | (length)))
+    ((uint16_t)(((uint16_t)(offset) << 8) | (length)))
 #define HBI_DIRECT_READ(offset,length) \
-    ((u16)(0x8000 | ((u16)(offset) << 8) | (length)))
+    ((uint16_t)(0x8000 | ((uint16_t)(offset) << 8) | (length)))
 #define HBI_PAGED_WRITE(offset,length) \
-    ((u16)(HBI_PAGED_READ(offset,length) | 0x0080))
+    ((uint16_t)(HBI_PAGED_READ(offset,length) | 0x0080))
 #define HBI_DIRECT_WRITE(offset,length) \
-    ((u16)(HBI_DIRECT_READ(offset,length) | 0x0080))
+    ((uint16_t)(HBI_DIRECT_READ(offset,length) | 0x0080))
 #define HBI_GLOBAL_DIRECT_WRITE(offset,length) \
-    ((u16)(0xFC00 | ((offset) << 4) | (length)))
+    ((uint16_t)(0xFC00 | ((offset) << 4) | (length)))
 #define HBI_CONFIGURE(pinConfig) \
-    ((u16)(0xFD00 | (pinConfig)))
+    ((uint16_t)(0xFD00 | (pinConfig)))
 #define HBI_SELECT_PAGE(page) \
-    ((u16)(0xFE00 | (page)))
+    ((uint16_t)(0xFE00 | (page)))
 #define HBI_NO_OP \
-    ((u16)0xFFFF)
+    ((uint16_t)0xFFFF)
 
 /* Macro to check for HBI status okay or not */
 #define CHK_STATUS(status)  \
@@ -163,7 +164,7 @@ static inline int tw_cmdresult_check(struct vproc_dev *pDev)
 
     if (buf !=0) 
     {
-        VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,
+        VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,
                         "Command ...Resultcode = 0x%04x\n", buf);
     }
     return (int)buf;
@@ -458,13 +459,18 @@ static inline hbi_status_t tw_wr_transport_cmd(struct vproc_dev *pDev,
     size_t               num_bytes_write;
 
     /* command word is always sent in Big Endian Byte Order */
+#if 0
     #if HOST_ENDIAN_LITTLE
     cmdword = (((cmdword & 0xFF) << 8) | (cmdword >>8));
     #endif
+
+    
+#endif
+    	
     num_bytes_write= sizeof(cmdword);    
-
+    
     VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,"Writing cmdword 0x%x\n",cmdword);
-
+    cmdword = HBI_VAL(pDev,cmdword);
     HBI_LOCK(pDev->port_lock,SSL_WAIT_FOREVER);
     ssl_status = SSL_port_write(pDev->port_handle,(void *)&cmdword,
                                  &num_bytes_write);
@@ -506,22 +512,42 @@ static inline hbi_status_t  tw_init_check_flash(struct vproc_dev *pDev)
 
 #endif
 }
-#ifdef ENABLE_SAVE_CFGREC_TO_FLASH
+
 static hbi_status_t tw_save_cfg_to_flash(struct vproc_dev *pDev,void *pCmdArgs)
 {
 #if defined(FLASH_PRESENT)
    hbi_status_t            status = HBI_STATUS_SUCCESS;
    uint16_t                image_number = *((int16_t *)pCmdArgs);
    ZL380xx_HMI_RESPONSE    hmi_response;
-   int                     val;
+   uint16_t                val;
    uint16_t                cmd;
+   user_buffer_t           buf[2] ={0};
 
    if (image_number <= 0) {
-      VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"Invalid image number\n");
+      VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"Invalid image number %d \n", image_number);
       return HBI_STATUS_INVALID_ARG;
    }
 
+   status = internal_hbi_read(pDev,
+                                 ZL380xx_FWR_COUNT_REG,
+                                 (user_buffer_t *)&val,2);
+   CHK_STATUS(status);
+   
+   val = HBI_VAL(pDev,val);
+   image_number = HBI_VAL(pDev,image_number);
+
+   buf[0]  = image_number >> 8;
+   buf[1]  = image_number & 0xFF;
+
+   if (image_number > val) {
+      VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"ERROR: Invalid image number - Number of images on flash = %d, it must be >= passed image number, %d\n", val, image_number);
+      return HBI_STATUS_INVALID_ARG;
+   }
+
+  VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"INFO: image number - Number of images on flash = %d must be >= passed image number, %d, %d\n", val, buf[0], buf[1]);
+
    val=0;
+ 
    status = internal_hbi_write(pDev,
                               ZL380xx_CFG_REC_CHKSUM_REG,
                               (user_buffer_t *)&val,2);
@@ -529,11 +555,10 @@ static hbi_status_t tw_save_cfg_to_flash(struct vproc_dev *pDev,void *pCmdArgs)
      VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"ERROR %d: \n", status);
      return status;
    }
+ 
 
    status = internal_hbi_write(pDev,
-                              ZL380xx_HOST_CMD_PARAM_RESULT_REG,
-                              (user_buffer_t *)&image_number,
-                              sizeof(image_number));
+                              ZL380xx_HOST_CMD_PARAM_RESULT_REG, buf, 2);
    CHK_STATUS(status);
 
    /* check whether there's any ongoing command */
@@ -542,8 +567,10 @@ static hbi_status_t tw_save_cfg_to_flash(struct vproc_dev *pDev,void *pCmdArgs)
 
    if(tw_chk_dev_boot_rom_mode(pDev))
    {
+          VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,
+                     "Using the boot mode cfg loading\n");
      status = tw_init_check_flash(pDev);
-     CHK_STATUS(status);
+     CHK_STATUS(status);    
 
      cmd = HBI_VAL(pDev,HOST_CMD_IMG_CFG_SAVE);
 
@@ -556,6 +583,9 @@ static hbi_status_t tw_save_cfg_to_flash(struct vproc_dev *pDev,void *pCmdArgs)
    }
    else
    {
+     
+     VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,
+                     "Using the program mode cfg loading\n");
      cmd = HBI_VAL(pDev,HOST_CMD_APP_SAVE_CFG_TO_FLASH);
 
      status = internal_hbi_write(pDev,
@@ -585,11 +615,10 @@ static hbi_status_t tw_save_cfg_to_flash(struct vproc_dev *pDev,void *pCmdArgs)
 #endif
    return HBI_STATUS_NO_FLASH_PRESENT;
 }
-#endif
+
 static hbi_status_t tw_sleep(struct vproc_dev *pDev)
 {
    hbi_status_t           status = HBI_STATUS_SUCCESS;
-   ZL380xx_HMI_RESPONSE   hmi_response;
    uint16_t               cmd;
 
    /* check whether there's any ongoing command */
@@ -609,15 +638,6 @@ static hbi_status_t tw_sleep(struct vproc_dev *pDev)
                               (user_buffer_t *)&cmd,sizeof(cmd));
    CHK_STATUS(status);
 
-   hmi_response = tw_cmdresult_check(pDev);
-   hmi_response = HBI_VAL(pDev,hmi_response);
-   if(hmi_response != HMI_RESP_SUCCESS)
-   {
-      VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,  
-                     "Command failed with response 0x%x\n",
-                     hmi_response);
-      return HBI_STATUS_COMMAND_ERR;
-   }
    return status;
 }
 
@@ -1003,7 +1023,55 @@ static hbi_status_t tw_boot_write(struct vproc_dev *pDev,void *pCmdArgs)
         return HBI_STATUS_INTERNAL_ERR;
     }
 
-   VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,"status 0x%x\n",status);
+   return status; 
+}
+
+/* tw_boot_write() - Upload a firmware image
+ *  \param[in]       dev - device pointer 
+ *                   cmdargs - pointer to tw_data structure
+ *
+ * Return: See Description below
+ *
+ * Description:
+ *  User will call this function by passing a buffer containing binary
+ *  firmware image.
+ * 
+ *  please note its user responsibility to keep track of how much data
+ *  already written.
+ *  function will return SUCCESS on a successful write operation
+ *  
+ */
+static hbi_status_t tw_config_write(struct vproc_dev *pDev,void *pCmdArgs)
+{
+   hbi_status_t        status = HBI_STATUS_SUCCESS;
+   ssl_status_t        ssl_status;
+   unsigned char       *pCfgData;
+   size_t               len;
+
+
+   if(pCmdArgs == NULL)
+   {
+     VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR," pCmdArgs: Null Argument Passed\n");
+     return HBI_STATUS_INVALID_ARG;
+   }
+
+   pCfgData = (unsigned char *)(((hbi_data_t *)pCmdArgs)->pData);
+   len = ((hbi_data_t *)pCmdArgs)->size;
+   if(pCfgData == NULL)
+   {
+      VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"pCfgData: Invalid buffer pointer\n");
+      return HBI_STATUS_INVALID_ARG;
+   }
+
+   HBI_LOCK(pDev->port_lock,SSL_WAIT_FOREVER);
+   ssl_status = SSL_port_write(pDev->port_handle,pCfgData,&len);
+   HBI_UNLOCK(pDev->port_lock);
+   if(ssl_status != SSL_STATUS_OK)
+    {
+        VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"SSL_port_write failed\n");
+        return HBI_STATUS_INTERNAL_ERR;
+    }
+
    return status; 
 }
 /*
@@ -1102,7 +1170,12 @@ hbi_status_t internal_hbi_set_attrib(struct vproc_dev *pDev,
          }
          else
          {
-            status = tw_wr_transport_cmd(pDev,(HBI_CONFIG_IF_CMD|HBI_CONFIG_WAKE));
+            status = tw_wr_transport_cmd(pDev,(HBI_CONFIG_IF_CMD | HBI_CONFIG_WAKE));
+			VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"wake status %d\n", status);
+			SSL_delay(10);
+            status = tw_wr_transport_cmd(pDev,(HBI_CONFIG_IF_CMD));
+			VPROC_DBG_PRINT(VPROC_DBG_LVL_ERR,"wake0 status %d\n", status);
+			
 #ifdef VPROC_DEV_INT_MODE_OD
             if(status == HBI_STATUS_SUCCESS)
             {
@@ -1135,12 +1208,13 @@ hbi_status_t internal_hbi_read(struct vproc_dev *pDev,
     ssl_port_access_t port_access;
     struct tw_hdr     hbi_hdr;
     int               i;
+    user_buffer_t buf[MAX_HBI_BYTES_PER_ACCESS];
     
     SSL_memset(&port_access,0,sizeof(ssl_port_access_t));
 
     tw_hbi_tp_frame_hdr(pDev,reg_addr,1,size,&hbi_hdr);
 
-    port_access.pDst =(void *) pData;
+    port_access.pDst = (void *)buf;
     port_access.nread = size;
     port_access.pSrc = &(hbi_hdr.cmd);
     port_access.nwrite = hbi_hdr.cmdlen;
@@ -1160,8 +1234,9 @@ hbi_status_t internal_hbi_read(struct vproc_dev *pDev,
     VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,"Received\n");
     for(i=0;i<size;i++)
     {
-        VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,
-                        "0x%x\t",((uint8_t *)port_access.pDst)[i]);
+        
+        *(pData + i) = ((user_buffer_t *)port_access.pDst)[i];
+        VPROC_DBG_PRINT(VPROC_DBG_LVL_INFO,"0x%x\t",((uint8_t*)pData)[i]);
     }
 
     return HBI_STATUS_SUCCESS;
@@ -1227,8 +1302,14 @@ hbi_status_t internal_hbi_set_command(struct vproc_dev *pDev,
         case HBI_CMD_LOAD_FWRCFG_FROM_FLASH:
             status = tw_load_fwrcfg_from_flash(pDev,pCmdArgs);
         break;
+        case HBI_CMD_LOAD_CFGREC_FROM_HOST:
+            status = tw_config_write(pDev,pCmdArgs);
+        break;
         case HBI_CMD_SAVE_FWRCFG_TO_FLASH:
             status = tw_save_fwrcfg_to_flash(pDev,pCmdArgs);
+        break;
+        case HBI_CMD_SAVE_CFG_TO_FLASH:
+            status = tw_save_cfg_to_flash(pDev,pCmdArgs);
         break;
         case HBI_CMD_ERASE_FWRCFG_FROM_FLASH:
             status = tw_erase_fwrcfg_from_flash(pDev,pCmdArgs);
@@ -1280,11 +1361,9 @@ hbi_status_t internal_hbi_get_hdr(hbi_data_t *pImg,hbi_img_hdr_t *pHdr)
    pHdr->minor_ver = pImg->pData[VER_INDX] >> IMG_VERSION_MINOR_SHIFT;
    pHdr->image_type = pImg->pData[FORMAT_INDX] >> IMG_HDR_TYPE_SHIFT;
 
-   if(pHdr->image_type == HBI_IMG_TYPE_FWR)
-   {
-      pHdr->endianness = pImg->pData[FORMAT_INDX] >> IMG_HDR_ENDIAN_SHIFT;
-      pHdr->fwr_code   = (pImg->pData[FWR_OPN_INDX] << 8) | pImg->pData[FWR_OPN_INDX+1];
-   }
+   pHdr->endianness = pImg->pData[FORMAT_INDX] >> IMG_HDR_ENDIAN_SHIFT;
+   pHdr->fwr_code   = (pImg->pData[FWR_OPN_INDX] << 8) | pImg->pData[FWR_OPN_INDX+1];
+
    pHdr->block_size = (pImg->pData[BLOCK_SIZE_INDX] << 8) | pImg->pData[BLOCK_SIZE_INDX+1];
 
    pHdr->img_len = pImg->pData[TOTAL_LEN_INDX] << 24; 
