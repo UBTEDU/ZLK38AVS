@@ -330,6 +330,10 @@ static int zl380xx_remove(struct platform_device *pdev)
 
 static const struct of_device_id zl380xx_of_match[] = {
     { .compatible = "ms,zl38040", },
+    { .compatible = "ms,zl38050", },
+    { .compatible = "ms,zl38051", },
+    { .compatible = "ms,zl38060", },
+    { .compatible = "ms,zl38080", },
     {}
 };
 MODULE_DEVICE_TABLE(of, zl380xx_of_match);

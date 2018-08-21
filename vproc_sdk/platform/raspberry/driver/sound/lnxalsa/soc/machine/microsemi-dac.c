@@ -45,7 +45,7 @@ static int snd_microsemi_dac_hw_params(struct snd_pcm_substream *substream,
     struct snd_soc_dai *cpu_dai = rtd->cpu_dai;
     unsigned int sample_bits = snd_pcm_format_physical_width(params_format(params));
 
-    return snd_soc_dai_set_bclk_ratio(cpu_dai, sample_bits * 4);
+    return snd_soc_dai_set_bclk_ratio(cpu_dai, sample_bits * 2);
 }
 
 /* machine stream operations */

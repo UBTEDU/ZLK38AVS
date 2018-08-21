@@ -28,6 +28,7 @@ HOST_KERNEL_IMAGE_PATH :=/boot/$(KERNEL).img
 
 export platformUser :=`id -un`
 export platformGroup :=`id -gn`
+export HBI=I2C
 
 
 AMAZON_AVS_ONLINE_REPOSITORY =https://github.com/alexa/avs-device-sdk
